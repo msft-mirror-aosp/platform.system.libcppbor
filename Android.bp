@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_android_hardware_backed_security",
     default_applicable_licenses: ["external_libcppbor_license"],
 }
 
@@ -69,7 +70,7 @@ cc_test {
         "libcppbor_defaults",
     ],
     srcs: [
-        "tests/cppbor_test.cpp"
+        "tests/cppbor_test.cpp",
     ],
     shared_libs: [
         "libcppbor_external",
@@ -87,7 +88,7 @@ cc_test_host {
         "libcppbor_defaults",
     ],
     srcs: [
-        "tests/cppbor_test.cpp"
+        "tests/cppbor_test.cpp",
     ],
     shared_libs: [
         "libcppbor_external",
