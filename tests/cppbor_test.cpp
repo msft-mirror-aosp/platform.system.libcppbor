@@ -969,8 +969,8 @@ TEST(ConvertTest, ViewTstr) {
 
 TEST(ConvertTest, ViewBstr) {
     array<uint8_t, 3> vec{0x23, 0x24, 0x22};
-    span<const uint8_t> view(vec.data(), vec.size());
-    unique_ptr<Item> item = details::makeItem(ViewBstr(view));
+    basic_string_view<uint8_t> sv(vec.data(), vec.size());
+    unique_ptr<Item> item = details::makeItem(ViewBstr(sv));
 
     EXPECT_EQ(BSTR, item->type());
     EXPECT_EQ(nullptr, item->asInt());
@@ -986,10 +986,7 @@ TEST(ConvertTest, ViewBstr) {
     EXPECT_EQ(nullptr, item->asViewTstr());
     EXPECT_NE(nullptr, item->asViewBstr());
 
-    auto toVec = [](span<const uint8_t> view) {
-      return std::vector<uint8_t>(view.begin(), view.end());
-    };
-    EXPECT_EQ(toVec(view), toVec(item->asViewBstr()->view()));
+    EXPECT_EQ(sv, item->asViewBstr()->view());
 }
 
 TEST(CloningTest, Uint) {
@@ -1114,7 +1111,7 @@ TEST(CloningTest, ViewTstr) {
 
 TEST(CloningTest, ViewBstr) {
     array<uint8_t, 5> vec{1, 2, 3, 255, 0};
-    span<const uint8_t> sv(vec.data(), vec.size());
+    basic_string_view<uint8_t> sv(vec.data(), vec.size());
     ViewBstr item(sv);
     auto clone = item.clone();
     EXPECT_EQ(clone->type(), BSTR);
