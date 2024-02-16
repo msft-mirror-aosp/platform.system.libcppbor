@@ -469,7 +469,7 @@ class ViewBstr : public Item {
         : mView(begin, std::distance(begin, end)) {}
 
     bool operator==(const ViewBstr& other) const& {
-      return std::equal(mView.begin(), mView.end(), other.mView.begin(), other.mView.end());
+        return std::equal(mView.begin(), mView.end(), other.mView.begin(), other.mView.end());
     }
 
     MajorType type() const override { return kMajorType; }
