@@ -33,6 +33,8 @@ namespace cppbor {
 
 namespace {
 
+const unsigned kMaxParseDepth = 1000;
+
 std::string insufficientLengthString(size_t bytesNeeded, size_t bytesAvail,
                                      const std::string& type) {
     char buf[1024];
@@ -58,7 +60,8 @@ std::tuple<bool, uint64_t, const uint8_t*> parseLength(const uint8_t* pos, const
 }
 
 std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, const uint8_t* end,
-                                                          bool emitViews, ParseClient* parseClient);
+                                                          bool emitViews, ParseClient* parseClient,
+                                                          unsigned depth);
 
 std::tuple<const uint8_t*, ParseClient*> handleUint(uint64_t value, const uint8_t* hdrBegin,
                                                     const uint8_t* hdrEnd,
@@ -205,16 +208,15 @@ IncompleteItem* IncompleteItem::cast(Item* item) {
 
 std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const uint8_t* hdrBegin,
                                                        const uint8_t* pos, const uint8_t* end,
-                                                       const std::string& typeName,
-                                                       bool emitViews,
-                                                       ParseClient* parseClient) {
+                                                       const std::string& typeName, bool emitViews,
+                                                       ParseClient* parseClient, unsigned depth) {
     while (entryCount > 0) {
         --entryCount;
         if (pos == end) {
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
         }
-        std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient);
+        std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient, depth + 1);
         if (!parseClient) return {hdrBegin, nullptr};
     }
     return {pos, parseClient};
@@ -222,26 +224,36 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const 
 
 std::tuple<const uint8_t*, ParseClient*> handleCompound(
         std::unique_ptr<Item> item, uint64_t entryCount, const uint8_t* hdrBegin,
-        const uint8_t* valueBegin, const uint8_t* end, const std::string& typeName,
-        bool emitViews, ParseClient* parseClient) {
+        const uint8_t* valueBegin, const uint8_t* end, const std::string& typeName, bool emitViews,
+        ParseClient* parseClient, unsigned depth) {
     parseClient =
             parseClient->item(item, hdrBegin, valueBegin, valueBegin /* don't know the end yet */);
     if (!parseClient) return {hdrBegin, nullptr};
 
     const uint8_t* pos;
-    std::tie(pos, parseClient) =
-            handleEntries(entryCount, hdrBegin, valueBegin, end, typeName, emitViews, parseClient);
+    std::tie(pos, parseClient) = handleEntries(entryCount, hdrBegin, valueBegin, end, typeName,
+                                               emitViews, parseClient, depth);
     if (!parseClient) return {hdrBegin, nullptr};
 
     return {pos, parseClient->itemEnd(item, hdrBegin, valueBegin, pos)};
 }
 
 std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, const uint8_t* end,
-                                                          bool emitViews, ParseClient* parseClient) {
+                                                          bool emitViews, ParseClient* parseClient,
+                                                          unsigned depth) {
     if (begin == end) {
         parseClient->error(
                 begin,
                 "Input buffer is empty. Begin and end cannot point to the same location.");
+        return {begin, nullptr};
+    }
+
+    // Limit recursion depth to avoid overflowing the stack.
+    if (depth > kMaxParseDepth) {
+        parseClient->error(begin,
+                           "Max depth reached.  Cannot parse CBOR structures with more "
+                           "than " +
+                                   std::to_string(kMaxParseDepth) + " levels.");
         return {begin, nullptr};
     }
 
@@ -309,15 +321,15 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
         case ARRAY:
             return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData, begin, pos,
-                                  end, "array", emitViews, parseClient);
+                                  end, "array", emitViews, parseClient, depth);
 
         case MAP:
             return handleCompound(std::make_unique<IncompleteMap>(addlData), addlData * 2, begin,
-                                  pos, end, "map", emitViews, parseClient);
+                                  pos, end, "map", emitViews, parseClient, depth);
 
         case SEMANTIC:
             return handleCompound(std::make_unique<IncompleteSemanticTag>(addlData), 1, begin, pos,
-                                  end, "semantic", emitViews, parseClient);
+                                  end, "semantic", emitViews, parseClient, depth);
 
         case SIMPLE:
             switch (addlData) {
@@ -402,7 +414,7 @@ class FullParseClient : public ParseClient {
 }  // anonymous namespace
 
 void parse(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient) {
-    parseRecursively(begin, end, false, parseClient);
+    parseRecursively(begin, end, false, parseClient, 0);
 }
 
 std::tuple<std::unique_ptr<Item> /* result */, const uint8_t* /* newPos */,
@@ -414,7 +426,7 @@ parse(const uint8_t* begin, const uint8_t* end) {
 }
 
 void parseWithViews(const uint8_t* begin, const uint8_t* end, ParseClient* parseClient) {
-    parseRecursively(begin, end, true, parseClient);
+    parseRecursively(begin, end, true, parseClient, 0);
 }
 
 std::tuple<std::unique_ptr<Item> /* result */, const uint8_t* /* newPos */,
