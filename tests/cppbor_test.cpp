@@ -33,6 +33,7 @@ using ::testing::InSequence;
 using ::testing::IsNull;
 using ::testing::NotNull;
 using ::testing::Return;
+using ::testing::StartsWith;
 using ::testing::Unused;
 
 string hexDump(const string& str) {
@@ -1577,6 +1578,30 @@ TEST(StreamParseTest, ViewBstr) {
     EXPECT_CALL(mpc, error(_, _)).Times(0);
 
     parseWithViews(encoded.data(), encoded.data() + encoded.size(), &mpc);
+}
+
+TEST(StreamParseTest, AllowDepth1000) {
+  std::vector<uint8_t> data(/* count */ 1000, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(1000).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, error(_, _)).Times(0);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
+}
+
+TEST(StreamParseTest, DisallowDepth1001) {
+  std::vector<uint8_t> data(/* count */ 1001, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(0);
+  EXPECT_CALL(mpc, error(_, StartsWith("Max depth reached"))).Times(1);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
 }
 
 TEST(FullParserTest, Uint) {
