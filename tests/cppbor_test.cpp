@@ -33,6 +33,7 @@ using ::testing::InSequence;
 using ::testing::IsNull;
 using ::testing::NotNull;
 using ::testing::Return;
+using ::testing::StartsWith;
 using ::testing::Unused;
 
 string hexDump(const string& str) {
@@ -969,8 +970,8 @@ TEST(ConvertTest, ViewTstr) {
 
 TEST(ConvertTest, ViewBstr) {
     array<uint8_t, 3> vec{0x23, 0x24, 0x22};
-    basic_string_view<uint8_t> sv(vec.data(), vec.size());
-    unique_ptr<Item> item = details::makeItem(ViewBstr(sv));
+    span<const uint8_t> view(vec.data(), vec.size());
+    unique_ptr<Item> item = details::makeItem(ViewBstr(view));
 
     EXPECT_EQ(BSTR, item->type());
     EXPECT_EQ(nullptr, item->asInt());
@@ -986,7 +987,10 @@ TEST(ConvertTest, ViewBstr) {
     EXPECT_EQ(nullptr, item->asViewTstr());
     EXPECT_NE(nullptr, item->asViewBstr());
 
-    EXPECT_EQ(sv, item->asViewBstr()->view());
+    auto toVec = [](span<const uint8_t> view) {
+      return std::vector<uint8_t>(view.begin(), view.end());
+    };
+    EXPECT_EQ(toVec(view), toVec(item->asViewBstr()->view()));
 }
 
 TEST(CloningTest, Uint) {
@@ -1111,7 +1115,7 @@ TEST(CloningTest, ViewTstr) {
 
 TEST(CloningTest, ViewBstr) {
     array<uint8_t, 5> vec{1, 2, 3, 255, 0};
-    basic_string_view<uint8_t> sv(vec.data(), vec.size());
+    span<const uint8_t> sv(vec.data(), vec.size());
     ViewBstr item(sv);
     auto clone = item.clone();
     EXPECT_EQ(clone->type(), BSTR);
@@ -1576,6 +1580,30 @@ TEST(StreamParseTest, ViewBstr) {
     parseWithViews(encoded.data(), encoded.data() + encoded.size(), &mpc);
 }
 
+TEST(StreamParseTest, AllowDepth1000) {
+  std::vector<uint8_t> data(/* count */ 1000, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(1000).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, error(_, _)).Times(0);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
+}
+
+TEST(StreamParseTest, DisallowDepth1001) {
+  std::vector<uint8_t> data(/* count */ 1001, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(0);
+  EXPECT_CALL(mpc, error(_, StartsWith("Max depth reached"))).Times(1);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
+}
+
 TEST(FullParserTest, Uint) {
     Uint val(10);
 
@@ -1642,11 +1670,74 @@ TEST(FullParserTest, Array) {
     EXPECT_EQ(arr[0]->asTstr()->value(), "hello");
 }
 
+TEST(FullParserTest, ArrayTooBigForMemory) {
+    vector<uint8_t> encoded = {
+      // Array with 2^64 - 1 data items.
+      0x9B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      // First item.
+      0x01,
+      // Rest of the items are missing.
+    };
+
+    auto [item, pos, message] = parse(encoded);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, encoded.data());
+    EXPECT_EQ(message, "Not enough entries for array.");
+}
+
+TEST(FullParserTest, MutableOutput) {
+    Array nestedArray("pizza", 31415);
+    Map nestedMap("array", std::move(nestedArray));
+    Array input(std::move(nestedMap));
+
+    auto [updatedItem, ignoredPos, ignoredMessage] = parse(input.encode());
+    updatedItem->asArray()->add(42);
+
+    // add some stuff to the map in our array
+    Map* parsedNestedMap = updatedItem->asArray()->get(0)->asMap();
+    ASSERT_NE(nullptr, parsedNestedMap);
+    parsedNestedMap->add("number", 10);
+    EXPECT_THAT(updatedItem->asArray()->get(0)->asMap()->get("number"), MatchesItem(Uint(10)));
+    parsedNestedMap->add(42, "the answer");
+    EXPECT_THAT(updatedItem->asArray()->get(0)->asMap()->get(42), MatchesItem(Tstr("the answer")));
+
+    // add some stuff to the array in the map that's in our array
+    Array* parsedNestedArray = parsedNestedMap->get("array")->asArray();
+    ASSERT_NE(nullptr, parsedNestedArray);
+    parsedNestedArray->add("pie");
+    EXPECT_THAT(
+        updatedItem->asArray()->get(0)->asMap()->get("array")->asArray()->get(2),
+        MatchesItem(Tstr("pie")));
+
+    // encode the mutated item, then ensure the CBOR is valid
+    const auto encodedUpdatedItem = updatedItem->encode();
+    auto [parsedUpdatedItem, pos, message] = parse(encodedUpdatedItem);
+    EXPECT_EQ("", message);
+    EXPECT_EQ(pos, encodedUpdatedItem.data() + encodedUpdatedItem.size());
+    ASSERT_NE(nullptr, parsedUpdatedItem);
+    EXPECT_THAT(parsedUpdatedItem, MatchesItem(ByRef(*updatedItem)));
+}
+
 TEST(FullParserTest, Map) {
     Map val("hello", -4, 3, Bstr("hi"));
 
     auto [item, pos, message] = parse(val.encode());
     EXPECT_THAT(item, MatchesItem(ByRef(val)));
+}
+
+TEST(FullParserTest, MapTooBigForMemory) {
+    vector<uint8_t> encoded = {
+      // Map with 2^64 - 1 pairs of data items.
+      0xBB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      // First pair.
+      0x01, 0x01,
+      // Rest of the pairs are missing.
+    };
+
+    auto [item, pos, message] = parse(encoded);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, encoded.data());
+    EXPECT_EQ(message, "Not enough entries for map.");
 }
 
 TEST(FullParserTest, SemanticTag) {
@@ -1658,6 +1749,20 @@ TEST(FullParserTest, SemanticTag) {
 
 TEST(FullParserTest, NestedSemanticTag) {
     SemanticTag val(10, SemanticTag(99, "Salem"));
+
+    auto [item, pos, message] = parse(val.encode());
+    EXPECT_THAT(item, MatchesItem(ByRef(val)));
+}
+
+TEST(FullParserTest, TaggedArray) {
+    SemanticTag val(10, Array().add(42));
+
+    auto [item, pos, message] = parse(val.encode());
+    EXPECT_THAT(item, MatchesItem(ByRef(val)));
+}
+
+TEST(FullParserTest, TaggedMap) {
+    SemanticTag val(100, Map().add("foo", "bar"));
 
     auto [item, pos, message] = parse(val.encode());
     EXPECT_THAT(item, MatchesItem(ByRef(val)));
