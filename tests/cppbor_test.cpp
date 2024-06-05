@@ -33,6 +33,7 @@ using ::testing::InSequence;
 using ::testing::IsNull;
 using ::testing::NotNull;
 using ::testing::Return;
+using ::testing::StartsWith;
 using ::testing::Unused;
 
 string hexDump(const string& str) {
@@ -969,8 +970,8 @@ TEST(ConvertTest, ViewTstr) {
 
 TEST(ConvertTest, ViewBstr) {
     array<uint8_t, 3> vec{0x23, 0x24, 0x22};
-    basic_string_view<uint8_t> sv(vec.data(), vec.size());
-    unique_ptr<Item> item = details::makeItem(ViewBstr(sv));
+    span<const uint8_t> view(vec.data(), vec.size());
+    unique_ptr<Item> item = details::makeItem(ViewBstr(view));
 
     EXPECT_EQ(BSTR, item->type());
     EXPECT_EQ(nullptr, item->asInt());
@@ -986,7 +987,10 @@ TEST(ConvertTest, ViewBstr) {
     EXPECT_EQ(nullptr, item->asViewTstr());
     EXPECT_NE(nullptr, item->asViewBstr());
 
-    EXPECT_EQ(sv, item->asViewBstr()->view());
+    auto toVec = [](span<const uint8_t> view) {
+      return std::vector<uint8_t>(view.begin(), view.end());
+    };
+    EXPECT_EQ(toVec(view), toVec(item->asViewBstr()->view()));
 }
 
 TEST(CloningTest, Uint) {
@@ -1111,7 +1115,7 @@ TEST(CloningTest, ViewTstr) {
 
 TEST(CloningTest, ViewBstr) {
     array<uint8_t, 5> vec{1, 2, 3, 255, 0};
-    basic_string_view<uint8_t> sv(vec.data(), vec.size());
+    span<const uint8_t> sv(vec.data(), vec.size());
     ViewBstr item(sv);
     auto clone = item.clone();
     EXPECT_EQ(clone->type(), BSTR);
@@ -1574,6 +1578,30 @@ TEST(StreamParseTest, ViewBstr) {
     EXPECT_CALL(mpc, error(_, _)).Times(0);
 
     parseWithViews(encoded.data(), encoded.data() + encoded.size(), &mpc);
+}
+
+TEST(StreamParseTest, AllowDepth1000) {
+  std::vector<uint8_t> data(/* count */ 1000, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(1000).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, error(_, _)).Times(0);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
+}
+
+TEST(StreamParseTest, DisallowDepth1001) {
+  std::vector<uint8_t> data(/* count */ 1001, /* value = array with one entry */ 0x81);
+  data.push_back(0);
+
+  MockParseClient mpc;
+  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+  EXPECT_CALL(mpc, itemEnd).Times(0);
+  EXPECT_CALL(mpc, error(_, StartsWith("Max depth reached"))).Times(1);
+
+  parse(data.data(), data.data() + data.size(), &mpc);
 }
 
 TEST(FullParserTest, Uint) {

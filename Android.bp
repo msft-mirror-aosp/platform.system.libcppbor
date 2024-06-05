@@ -13,13 +13,14 @@
 // limitations under the License.
 
 package {
-    default_applicable_licenses: ["external_libcppbor_license"],
+    default_team: "trendy_team_android_hardware_backed_security",
+    default_applicable_licenses: ["libcppbor_license"],
 }
 
 // Added automatically by a large-scale-change
 // See: http://go/android-license-faq
 license {
-    name: "external_libcppbor_license",
+    name: "libcppbor_license",
     visibility: [":__subpackages__"],
     license_kinds: [
         "SPDX-license-identifier-Apache-2.0",
@@ -36,6 +37,31 @@ cc_defaults {
         "-Wextra",
         "-Werror",
     ],
+}
+
+cc_library {
+    name: "libcppbor",
+    defaults: [
+        "libcppbor_defaults",
+    ],
+    vendor_available: true,
+    host_supported: true,
+    srcs: [
+        "src/cppbor.cpp",
+        "src/cppbor_parse.cpp",
+    ],
+    export_include_dirs: [
+        "include/cppbor",
+    ],
+    shared_libs: [
+        "libbase",
+        "libcrypto",
+    ],
+    target: {
+        windows: {
+            enabled: true,
+        },
+    },
 }
 
 cc_library {
@@ -64,15 +90,15 @@ cc_library {
 }
 
 cc_test {
-    name: "cppbor_test_external",
+    name: "cppbor_test",
     defaults: [
         "libcppbor_defaults",
     ],
     srcs: [
-        "tests/cppbor_test.cpp"
+        "tests/cppbor_test.cpp",
     ],
     shared_libs: [
-        "libcppbor_external",
+        "libcppbor",
         "libbase",
     ],
     static_libs: [
@@ -82,15 +108,15 @@ cc_test {
 }
 
 cc_test_host {
-    name: "cppbor_host_test_external",
+    name: "cppbor_host_test",
     defaults: [
         "libcppbor_defaults",
     ],
     srcs: [
-        "tests/cppbor_test.cpp"
+        "tests/cppbor_test.cpp",
     ],
     shared_libs: [
-        "libcppbor_external",
+        "libcppbor",
         "libbase",
     ],
     static_libs: [
