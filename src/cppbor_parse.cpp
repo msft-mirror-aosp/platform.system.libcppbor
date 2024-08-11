@@ -127,8 +127,10 @@ class IncompleteArray : public Array, public IncompleteItem {
   public:
     explicit IncompleteArray(size_t size) : mSize(size) {}
 
-    // We return the "complete" size, rather than the actual size.
-    size_t size() const override { return mSize; }
+    // If the "complete" size is known, return it, otherwise return the current size.
+    size_t size() const override {
+        return mSize == SIZE_MAX ? Array::size() : mSize;
+    }
 
     void add(std::unique_ptr<Item> item) override {
         mEntries.push_back(std::move(item));
@@ -148,8 +150,10 @@ class IncompleteMap : public Map, public IncompleteItem {
   public:
     explicit IncompleteMap(size_t size) : mSize(size) {}
 
-    // We return the "complete" size, rather than the actual size.
-    size_t size() const override { return mSize; }
+    // If the "complete" size is known, return it, otherwise return the current size.
+    size_t size() const override {
+        return mSize == SIZE_MAX ? Map::size() : mSize;
+    }
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
@@ -216,6 +220,11 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const 
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
         }
+        if (*pos == 0xFF) {
+            // Next character is the "break" Stop Code
+            ++pos;
+            break;
+        }
         std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient, depth + 1);
         if (!parseClient) return {hdrBegin, nullptr};
     }
@@ -265,7 +274,9 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
     bool success = true;
     uint64_t addlData;
-    if (tagInt < ONE_BYTE_LENGTH) {
+    if ((type == ARRAY || type == MAP) && tagInt == INDEFINITE_LENGTH) {
+        addlData = SIZE_MAX;
+    } else if (tagInt < ONE_BYTE_LENGTH) {
         addlData = tagInt;
     } else if (tagInt > EIGHT_BYTE_LENGTH) {
         parseClient->error(
