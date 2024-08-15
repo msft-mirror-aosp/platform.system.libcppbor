@@ -1862,14 +1862,55 @@ TEST(FullParserTest, ReservedAdditionalInformation) {
               message);
 }
 
-TEST(FullParserTest, IndefiniteArray) {
-    vector<uint8_t> indefiniteArray = {0x7F};
+TEST(FullParserTest, IndefiniteArrayEmpty) {
+    Bstr encoding("\x9F\xFF");
+    string expected = Array().toString();
 
-    auto [item, pos, message] = parse(indefiniteArray);
-    EXPECT_THAT(item, IsNull());
-    EXPECT_EQ(pos, indefiniteArray.data());
-    EXPECT_EQ("Reserved additional information value or unsupported indefinite length item.",
-              message);
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
+}
+
+TEST(FullParserTest, IndefiniteArrayWithOneNumber) {
+    Bstr encoding("\x9F\x01\xFF");
+    string expected = Array(Uint(1)).toString();
+
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
+}
+
+TEST(FullParserTest, IndefiniteArrayOfArray) {
+    Bstr encoding("\x9F\x9F\x01\xFF\xFF");
+
+    Array nested;
+    nested.add(Array(Uint(1)));
+    string expected = nested.toString();
+
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
+}
+
+TEST(FullParserTest, IndefiniteMapEmpty) {
+    Bstr encoding("\xBF\xFF");
+    string expected = Map().toString();
+
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
+}
+
+TEST(FullParserTest, IndefiniteMapsNested) {
+    Bstr encoding("\xBF\x01\xBF\xFF\xFF");
+    string expected = Map(Uint(1), Map()).toString();
+
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
+}
+
+TEST(FullParserTest, IndefiniteMapWithOneEntry) {
+    Bstr encoding("\xBF\x01\x05\xFF");
+    string expected = Map(Uint(1), Uint(5)).toString();
+
+    auto [item, pos, message] = parse(&encoding);
+    EXPECT_EQ(expected, item->toString());
 }
 
 TEST(FullParserTest, UnassignedSimpleValue) {
