@@ -68,6 +68,7 @@ enum SpecialAddlInfoValues : uint8_t {
     TWO_BYTE_LENGTH = 25,
     FOUR_BYTE_LENGTH = 26,
     EIGHT_BYTE_LENGTH = 27,
+    INDEFINITE_LENGTH = 31,
 };
 
 class Item;
