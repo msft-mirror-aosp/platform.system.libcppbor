@@ -1647,29 +1647,11 @@ TEST(FullParserTest, Tstr) {
     EXPECT_THAT(item, MatchesItem(val));
 }
 
-TEST(FullParserTest, IndefiniteLengthTstr) {
-    vector<uint8_t> indefiniteRangeTstr = {0x7F, 't', 'e', 's', 't'};
-
-    auto [item, pos, message] = parse(indefiniteRangeTstr);
-    EXPECT_THAT(item, IsNull());
-    EXPECT_EQ(pos, indefiniteRangeTstr.data());
-    EXPECT_EQ(message, "Unsupported indefinite length item.");
-}
-
 TEST(FullParserTest, Bstr) {
     Bstr val("\x00\x01\0x02"s);
 
     auto [item, pos, message] = parse(val.encode());
     EXPECT_THAT(item, MatchesItem(val));
-}
-
-TEST(FullParserTest, IndefiniteLengthBstr) {
-    vector<uint8_t> indefiniteRangeBstr = {0x5F, 0x41, 0x42, 0x43, 0x44};
-
-    auto [item, pos, message] = parse(indefiniteRangeBstr);
-    EXPECT_THAT(item, IsNull());
-    EXPECT_EQ(pos, indefiniteRangeBstr.data());
-    EXPECT_EQ(message, "Unsupported indefinite length item.");
 }
 
 TEST(FullParserTest, Array) {
@@ -1876,7 +1858,8 @@ TEST(FullParserTest, ReservedAdditionalInformation) {
     auto [item, pos, message] = parse(reservedVal);
     EXPECT_THAT(item, IsNull());
     EXPECT_EQ(pos, reservedVal.data());
-    EXPECT_EQ("Reserved additional information value.", message);
+    EXPECT_EQ("Reserved additional information value or unsupported indefinite length item.",
+              message);
 }
 
 TEST(FullParserTest, IndefiniteArrayEmpty) {
