@@ -17,6 +17,7 @@
 #include "cppbor_parse.h"
 
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stack>
 #include <type_traits>
@@ -125,10 +126,12 @@ class IncompleteItem {
 
 class IncompleteArray : public Array, public IncompleteItem {
   public:
-    explicit IncompleteArray(size_t size) : mSize(size) {}
+    explicit IncompleteArray(std::optional<size_t> size) : mSize(size) {}
 
-    // We return the "complete" size, rather than the actual size.
-    size_t size() const override { return mSize; }
+    // If the "complete" size is known, return it, otherwise return the current size.
+    size_t size() const override {
+        return mSize.value_or(Array::size());
+    }
 
     void add(std::unique_ptr<Item> item) override {
         mEntries.push_back(std::move(item));
@@ -141,15 +144,17 @@ class IncompleteArray : public Array, public IncompleteItem {
     }
 
   private:
-    size_t mSize;
+    std::optional<size_t> mSize;
 };
 
 class IncompleteMap : public Map, public IncompleteItem {
   public:
-    explicit IncompleteMap(size_t size) : mSize(size) {}
+    explicit IncompleteMap(std::optional<size_t> size) : mSize(size) {}
 
-    // We return the "complete" size, rather than the actual size.
-    size_t size() const override { return mSize; }
+    // If the "complete" size is known, return it, otherwise return the current size.
+    size_t size() const override {
+        return mSize.value_or(Map::size());
+    }
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
@@ -165,7 +170,7 @@ class IncompleteMap : public Map, public IncompleteItem {
 
   private:
     std::unique_ptr<Item> mKeyHeldForAdding;
-    size_t mSize;
+    std::optional<size_t> mSize;
 };
 
 class IncompleteSemanticTag : public SemanticTag, public IncompleteItem {
@@ -206,15 +211,23 @@ IncompleteItem* IncompleteItem::cast(Item* item) {
     return nullptr;
 }
 
-std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const uint8_t* hdrBegin,
-                                                       const uint8_t* pos, const uint8_t* end,
+std::tuple<const uint8_t*, ParseClient*> handleEntries(std::optional<size_t> entryCount,
+                                                       const uint8_t* hdrBegin, const uint8_t* pos,
+                                                       const uint8_t* end,
                                                        const std::string& typeName, bool emitViews,
                                                        ParseClient* parseClient, unsigned depth) {
-    while (entryCount > 0) {
-        --entryCount;
+    while (entryCount.value_or(1) > 0) {
+        if(entryCount.has_value()) {
+            --*entryCount;
+        }
         if (pos == end) {
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
+        }
+        if (*pos == 0xFF) {
+            // Next character is the "break" Stop Code
+            ++pos;
+            break;
         }
         std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient, depth + 1);
         if (!parseClient) return {hdrBegin, nullptr};
@@ -223,7 +236,7 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(size_t entryCount, const 
 }
 
 std::tuple<const uint8_t*, ParseClient*> handleCompound(
-        std::unique_ptr<Item> item, uint64_t entryCount, const uint8_t* hdrBegin,
+        std::unique_ptr<Item> item, std::optional<uint64_t> entryCount, const uint8_t* hdrBegin,
         const uint8_t* valueBegin, const uint8_t* end, const std::string& typeName, bool emitViews,
         ParseClient* parseClient, unsigned depth) {
     parseClient =
@@ -264,13 +277,11 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
     ++pos;
 
     bool success = true;
-    uint64_t addlData;
+    std::optional<uint64_t> addlData;
     if (tagInt < ONE_BYTE_LENGTH) {
         addlData = tagInt;
-    } else if (tagInt > EIGHT_BYTE_LENGTH) {
-        parseClient->error(
-                begin,
-                "Reserved additional information value or unsupported indefinite length item.");
+    } else if (tagInt > EIGHT_BYTE_LENGTH && tagInt != INDEFINITE_LENGTH) {
+        parseClient->error(begin, "Reserved additional information value.");
         return {begin, nullptr};
     } else {
         switch (tagInt) {
@@ -290,6 +301,14 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                 std::tie(success, addlData, pos) = parseLength<uint64_t>(pos, end, parseClient);
                 break;
 
+            case INDEFINITE_LENGTH:
+                if (type != ARRAY && type != MAP) {
+                    parseClient->error(begin, "Unsupported indefinite length item.");
+                    return {begin, nullptr};
+                }
+                addlData = std::nullopt;
+                break;
+
             default:
                 CHECK(false);  //  It's impossible to get here
                 break;
@@ -300,42 +319,47 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
     switch (type) {
         case UINT:
-            return handleUint(addlData, begin, pos, parseClient);
+            return handleUint(*addlData, begin, pos, parseClient);
 
         case NINT:
-            return handleNint(addlData, begin, pos, parseClient);
+            return handleNint(*addlData, begin, pos, parseClient);
 
         case BSTR:
             if (emitViews) {
-                return handleString<ViewBstr>(addlData, begin, pos, end, "byte string", parseClient);
+                return handleString<ViewBstr>(*addlData, begin, pos, end,
+                                              "byte string", parseClient);
             } else {
-                return handleString<Bstr>(addlData, begin, pos, end, "byte string", parseClient);
+                return handleString<Bstr>(*addlData, begin, pos, end,
+                                          "byte string", parseClient);
             }
 
         case TSTR:
             if (emitViews) {
-                return handleString<ViewTstr>(addlData, begin, pos, end, "text string", parseClient);
+                return handleString<ViewTstr>(*addlData, begin, pos, end,
+                                              "text string", parseClient);
             } else {
-                return handleString<Tstr>(addlData, begin, pos, end, "text string", parseClient);
+                return handleString<Tstr>(*addlData, begin, pos, end,
+                                          "text string", parseClient);
             }
 
         case ARRAY:
-            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData, begin, pos,
-                                  end, "array", emitViews, parseClient, depth);
+            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData,
+                                  begin, pos, end, "array", emitViews, parseClient, depth);
 
         case MAP:
-            return handleCompound(std::make_unique<IncompleteMap>(addlData), addlData * 2, begin,
-                                  pos, end, "map", emitViews, parseClient, depth);
+            return handleCompound(std::make_unique<IncompleteMap>(addlData),
+                    addlData.has_value() ? *addlData * 2 : addlData, begin, pos, end,
+                    "map", emitViews, parseClient, depth);
 
         case SEMANTIC:
-            return handleCompound(std::make_unique<IncompleteSemanticTag>(addlData), 1, begin, pos,
+            return handleCompound(std::make_unique<IncompleteSemanticTag>(*addlData), 1, begin, pos,
                                   end, "semantic", emitViews, parseClient, depth);
 
         case SIMPLE:
-            switch (addlData) {
+            switch (*addlData) {
                 case TRUE:
                 case FALSE:
-                    return handleBool(addlData, begin, pos, parseClient);
+                    return handleBool(*addlData, begin, pos, parseClient);
                 case NULL_V:
                     return handleNull(begin, pos, parseClient);
                 default:
