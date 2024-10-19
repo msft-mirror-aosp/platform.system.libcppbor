@@ -124,3 +124,9 @@ cc_test_host {
     ],
     test_suites: ["general-tests"],
 }
+
+dirgroup {
+    name: "trusty_dirgroup_system_libcppbor",
+    dirs: ["."],
+    visibility: ["//trusty/vendor/google/aosp/scripts"],
+}
