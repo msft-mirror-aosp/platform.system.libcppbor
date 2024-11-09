@@ -184,8 +184,8 @@ class Item {
      *
      * The tstr "AES" is tagged with 6.  The combined entity ("AES" tagged with 6) is tagged with 5,
      * etc.  So in this example, semanticTagCount() would return 3, and semanticTag(0) would return
-     * 5 semanticTag(1) would return 5 and semanticTag(2) would return 4.  For values of n > 2,
-     * semanticTag(n) will return 0, but this is a meaningless value.
+     * 6, semanticTag(1) would return 5, and semanticTag(2) would return 4.  For values of n > 2,
+     * semanticTag(n) would return 0, but this is a meaningless value.
      *
      * If this layering is confusing, you probably don't have to worry about it. Nested tagging does
      * not appear to be common, so semanticTag(0) is the only one you'll use.
