@@ -116,8 +116,7 @@ inline ParseResult parseWithViews(const uint8_t* begin, size_t size) {
  * problem encountered.
  */
 inline ParseResult parse(const Bstr* bstr) {
-    if (!bstr)
-        return ParseResult(nullptr, nullptr, "Null Bstr pointer");
+    if (!bstr) return ParseResult(nullptr, nullptr, "Null Bstr pointer");
     return parse(bstr->value());
 }
 
