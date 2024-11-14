@@ -27,20 +27,19 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <algorithm>
 
 #ifdef OS_WINDOWS
 #include <basetsd.h>
 
 #define ssize_t SSIZE_T
-#endif // OS_WINDOWS
+#endif  // OS_WINDOWS
 
 #ifdef TRUE
 #undef TRUE
-#endif // TRUE
+#endif  // TRUE
 #ifdef FALSE
 #undef FALSE
-#endif // FALSE
+#endif  // FALSE
 
 namespace cppbor {
 
@@ -466,8 +465,7 @@ class ViewBstr : public Item {
     ViewBstr(I1 begin, I2 end) : mView(begin, end) {}
 
     // Construct from a uint8_t pointer pair
-    ViewBstr(const uint8_t* begin, const uint8_t* end)
-        : mView(begin, std::distance(begin, end)) {}
+    ViewBstr(const uint8_t* begin, const uint8_t* end) : mView(begin, std::distance(begin, end)) {}
 
     bool operator==(const ViewBstr& other) const& {
         return std::equal(mView.begin(), mView.end(), other.mView.begin(), other.mView.end());
@@ -567,8 +565,7 @@ class ViewTstr : public Item {
 
     // Construct from a uint8_t pointer pair
     ViewTstr(const uint8_t* begin, const uint8_t* end)
-        : mView(reinterpret_cast<const char*>(begin),
-                std::distance(begin, end)) {}
+        : mView(reinterpret_cast<const char*>(begin), std::distance(begin, end)) {}
 
     bool operator==(const ViewTstr& other) const& { return mView == other.mView; }
 
@@ -1067,17 +1064,17 @@ inline void map_helper(Map& map, Key&& key, Value&& value, Rest&&... rest) {
 }  // namespace details
 
 template <typename... Args,
-         /* Prevent implicit construction with a single argument. */
-         typename = std::enable_if_t<(sizeof...(Args)) != 1>>
+          /* Prevent implicit construction with a single argument. */
+          typename = std::enable_if_t<(sizeof...(Args)) != 1>>
 Array::Array(Args&&... args) {
     mEntries.reserve(sizeof...(args));
     (mEntries.push_back(details::makeItem(std::forward<Args>(args))), ...);
 }
 
 template <typename T,
-         /* Prevent use as copy constructor. */
-         typename = std::enable_if_t<
-            !std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<T>>>>>
+          /* Prevent use as copy constructor. */
+          typename = std::enable_if_t<
+                  !std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<T>>>>>
 Array::Array(T&& v) {
     mEntries.push_back(details::makeItem(std::forward<T>(v)));
 }
