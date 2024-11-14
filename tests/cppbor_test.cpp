@@ -988,7 +988,7 @@ TEST(ConvertTest, ViewBstr) {
     EXPECT_NE(nullptr, item->asViewBstr());
 
     auto toVec = [](span<const uint8_t> view) {
-      return std::vector<uint8_t>(view.begin(), view.end());
+        return std::vector<uint8_t>(view.begin(), view.end());
     };
     EXPECT_EQ(toVec(view), toVec(item->asViewBstr()->view()));
 }
@@ -1581,27 +1581,27 @@ TEST(StreamParseTest, ViewBstr) {
 }
 
 TEST(StreamParseTest, AllowDepth1000) {
-  std::vector<uint8_t> data(/* count */ 1000, /* value = array with one entry */ 0x81);
-  data.push_back(0);
+    std::vector<uint8_t> data(/* count */ 1000, /* value = array with one entry */ 0x81);
+    data.push_back(0);
 
-  MockParseClient mpc;
-  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
-  EXPECT_CALL(mpc, itemEnd).Times(1000).WillRepeatedly(Return(&mpc));
-  EXPECT_CALL(mpc, error(_, _)).Times(0);
+    MockParseClient mpc;
+    EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+    EXPECT_CALL(mpc, itemEnd).Times(1000).WillRepeatedly(Return(&mpc));
+    EXPECT_CALL(mpc, error(_, _)).Times(0);
 
-  parse(data.data(), data.data() + data.size(), &mpc);
+    parse(data.data(), data.data() + data.size(), &mpc);
 }
 
 TEST(StreamParseTest, DisallowDepth1001) {
-  std::vector<uint8_t> data(/* count */ 1001, /* value = array with one entry */ 0x81);
-  data.push_back(0);
+    std::vector<uint8_t> data(/* count */ 1001, /* value = array with one entry */ 0x81);
+    data.push_back(0);
 
-  MockParseClient mpc;
-  EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
-  EXPECT_CALL(mpc, itemEnd).Times(0);
-  EXPECT_CALL(mpc, error(_, StartsWith("Max depth reached"))).Times(1);
+    MockParseClient mpc;
+    EXPECT_CALL(mpc, item).Times(1001).WillRepeatedly(Return(&mpc));
+    EXPECT_CALL(mpc, itemEnd).Times(0);
+    EXPECT_CALL(mpc, error(_, StartsWith("Max depth reached"))).Times(1);
 
-  parse(data.data(), data.data() + data.size(), &mpc);
+    parse(data.data(), data.data() + data.size(), &mpc);
 }
 
 TEST(FullParserTest, Uint) {
@@ -1690,11 +1690,11 @@ TEST(FullParserTest, Array) {
 
 TEST(FullParserTest, ArrayTooBigForMemory) {
     vector<uint8_t> encoded = {
-      // Array with 2^64 - 1 data items.
-      0x9B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-      // First item.
-      0x01,
-      // Rest of the items are missing.
+            // Array with 2^64 - 1 data items.
+            0x9B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            // First item.
+            0x01,
+            // Rest of the items are missing.
     };
 
     auto [item, pos, message] = parse(encoded);
@@ -1723,9 +1723,8 @@ TEST(FullParserTest, MutableOutput) {
     Array* parsedNestedArray = parsedNestedMap->get("array")->asArray();
     ASSERT_NE(nullptr, parsedNestedArray);
     parsedNestedArray->add("pie");
-    EXPECT_THAT(
-        updatedItem->asArray()->get(0)->asMap()->get("array")->asArray()->get(2),
-        MatchesItem(Tstr("pie")));
+    EXPECT_THAT(updatedItem->asArray()->get(0)->asMap()->get("array")->asArray()->get(2),
+                MatchesItem(Tstr("pie")));
 
     // encode the mutated item, then ensure the CBOR is valid
     const auto encodedUpdatedItem = updatedItem->encode();
@@ -1745,11 +1744,11 @@ TEST(FullParserTest, Map) {
 
 TEST(FullParserTest, MapTooBigForMemory) {
     vector<uint8_t> encoded = {
-      // Map with 2^64 - 1 pairs of data items.
-      0xBB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-      // First pair.
-      0x01, 0x01,
-      // Rest of the pairs are missing.
+            // Map with 2^64 - 1 pairs of data items.
+            0xBB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            // First pair.
+            0x01, 0x01,
+            // Rest of the pairs are missing.
     };
 
     auto [item, pos, message] = parse(encoded);

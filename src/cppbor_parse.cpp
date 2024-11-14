@@ -129,13 +129,9 @@ class IncompleteArray : public Array, public IncompleteItem {
     explicit IncompleteArray(std::optional<size_t> size) : mSize(size) {}
 
     // If the "complete" size is known, return it, otherwise return the current size.
-    size_t size() const override {
-        return mSize.value_or(Array::size());
-    }
+    size_t size() const override { return mSize.value_or(Array::size()); }
 
-    void add(std::unique_ptr<Item> item) override {
-        mEntries.push_back(std::move(item));
-    }
+    void add(std::unique_ptr<Item> item) override { mEntries.push_back(std::move(item)); }
 
     virtual std::unique_ptr<Item> finalize() && override {
         // Use Array explicitly so the compiler picks the correct ctor overload
@@ -152,9 +148,7 @@ class IncompleteMap : public Map, public IncompleteItem {
     explicit IncompleteMap(std::optional<size_t> size) : mSize(size) {}
 
     // If the "complete" size is known, return it, otherwise return the current size.
-    size_t size() const override {
-        return mSize.value_or(Map::size());
-    }
+    size_t size() const override { return mSize.value_or(Map::size()); }
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
@@ -217,7 +211,7 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(std::optional<size_t> ent
                                                        const std::string& typeName, bool emitViews,
                                                        ParseClient* parseClient, unsigned depth) {
     while (entryCount.value_or(1) > 0) {
-        if(entryCount.has_value()) {
+        if (entryCount.has_value()) {
             --*entryCount;
         }
         if (pos == end) {
@@ -256,8 +250,7 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                                                           unsigned depth) {
     if (begin == end) {
         parseClient->error(
-                begin,
-                "Input buffer is empty. Begin and end cannot point to the same location.");
+                begin, "Input buffer is empty. Begin and end cannot point to the same location.");
         return {begin, nullptr};
     }
 
@@ -326,30 +319,28 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
         case BSTR:
             if (emitViews) {
-                return handleString<ViewBstr>(*addlData, begin, pos, end,
-                                              "byte string", parseClient);
+                return handleString<ViewBstr>(*addlData, begin, pos, end, "byte string",
+                                              parseClient);
             } else {
-                return handleString<Bstr>(*addlData, begin, pos, end,
-                                          "byte string", parseClient);
+                return handleString<Bstr>(*addlData, begin, pos, end, "byte string", parseClient);
             }
 
         case TSTR:
             if (emitViews) {
-                return handleString<ViewTstr>(*addlData, begin, pos, end,
-                                              "text string", parseClient);
+                return handleString<ViewTstr>(*addlData, begin, pos, end, "text string",
+                                              parseClient);
             } else {
-                return handleString<Tstr>(*addlData, begin, pos, end,
-                                          "text string", parseClient);
+                return handleString<Tstr>(*addlData, begin, pos, end, "text string", parseClient);
             }
 
         case ARRAY:
-            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData,
-                                  begin, pos, end, "array", emitViews, parseClient, depth);
+            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData, begin, pos,
+                                  end, "array", emitViews, parseClient, depth);
 
         case MAP:
             return handleCompound(std::make_unique<IncompleteMap>(addlData),
-                    addlData.has_value() ? *addlData * 2 : addlData, begin, pos, end,
-                    "map", emitViews, parseClient, depth);
+                                  addlData.has_value() ? *addlData * 2 : addlData, begin, pos, end,
+                                  "map", emitViews, parseClient, depth);
 
         case SEMANTIC:
             return handleCompound(std::make_unique<IncompleteSemanticTag>(*addlData), 1, begin, pos,
