@@ -16,11 +16,13 @@
 
 #include "cppbor_parse.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <stack>
 #include <type_traits>
+
 #include "cppbor.h"
 
 #ifndef __TRUSTY__
@@ -35,6 +37,7 @@ namespace cppbor {
 namespace {
 
 const unsigned kMaxParseDepth = 1000;
+const size_t kMaxReserveSize = 8192;
 
 std::string insufficientLengthString(size_t bytesNeeded, size_t bytesAvail,
                                      const std::string& type) {
@@ -131,7 +134,10 @@ class IncompleteArray : public Array, public IncompleteItem {
     // If the "complete" size is known, return it, otherwise return the current size.
     size_t size() const override { return mSize.value_or(Array::size()); }
 
-    void add(std::unique_ptr<Item> item) override { mEntries.push_back(std::move(item)); }
+    void add(std::unique_ptr<Item> item) override {
+        if (mSize) mEntries.reserve(std::min(mSize.value(), kMaxReserveSize));
+        mEntries.push_back(std::move(item));
+    }
 
     virtual std::unique_ptr<Item> finalize() && override {
         // Use Array explicitly so the compiler picks the correct ctor overload
@@ -152,6 +158,7 @@ class IncompleteMap : public Map, public IncompleteItem {
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
+            if (mSize) mEntries.reserve(std::min(mSize.value(), kMaxReserveSize));
             mEntries.push_back({std::move(mKeyHeldForAdding), std::move(item)});
         } else {
             mKeyHeldForAdding = std::move(item);
