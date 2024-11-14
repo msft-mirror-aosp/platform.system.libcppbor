@@ -224,8 +224,8 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(std::optional<size_t> ent
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
         }
-        if (*pos == 0xFF) {
-            // Next character is the "break" Stop Code
+        if (!entryCount.has_value() && *pos == 0xFF) {
+            // We're in an indeterminate-length object and found a stop code.
             ++pos;
             break;
         }
