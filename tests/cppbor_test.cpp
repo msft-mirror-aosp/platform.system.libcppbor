@@ -1765,6 +1765,17 @@ TEST(FullParserTest, SemanticTag) {
     EXPECT_THAT(item, MatchesItem(ByRef(val)));
 }
 
+TEST(FullParserTest, SemanticTagWithInvalidContent) {
+    vector<uint8_t> invalidSemantic = {
+            0xc7,  // Semantic tag, value 7.
+            0xff,  // "Break" stop code.
+    };
+    auto [item, pos, message] = parse(invalidSemantic);
+    EXPECT_THAT(item, IsNull());
+    EXPECT_EQ(pos, invalidSemantic.data() + 1);
+    EXPECT_EQ(message, "Unsupported indefinite length item.");
+}
+
 TEST(FullParserTest, NestedSemanticTag) {
     SemanticTag val(10, SemanticTag(99, "Salem"));
 
