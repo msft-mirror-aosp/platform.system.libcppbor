@@ -17,6 +17,8 @@
 #include "cppbor_parse.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -101,6 +103,28 @@ std::tuple<const uint8_t*, ParseClient*> handleNull(const uint8_t* hdrBegin, con
     return {hdrEnd,
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
+
+#ifdef __STDC_IEC_559__
+std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8_t* hdrBegin,
+                                                    const uint8_t* hdrEnd,
+                                                    ParseClient* parseClient) {
+    float f;
+    std::memcpy(&f, &value, sizeof(float));
+    std::unique_ptr<Item> item = std::make_unique<Float>(f);
+    return {hdrEnd,
+            parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
+}
+
+std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint8_t* hdrBegin,
+                                                    const uint8_t* hdrEnd,
+                                                    ParseClient* parseClient) {
+    double d;
+    std::memcpy(&d, &value, sizeof(double));
+    std::unique_ptr<Item> item = std::make_unique<Double>(d);
+    return {hdrEnd,
+            parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
+}
+#endif  // __STDC_IEC_559__
 
 template <typename T>
 std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uint8_t* hdrBegin,
@@ -354,14 +378,25 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                                   end, "semantic", emitViews, parseClient, depth);
 
         case SIMPLE:
-            switch (*addlData) {
+            switch (tagInt) {
                 case TRUE:
                 case FALSE:
                     return handleBool(*addlData, begin, pos, parseClient);
+#ifdef __STDC_IEC_559__
+                case FLOAT_V:
+                    return handleFloat(*addlData, begin, pos, parseClient);
+                case DOUBLE_V:
+                    return handleDouble(*addlData, begin, pos, parseClient);
+#else
+                case FLOAT_V:
+                case DOUBLE_V:
+                    parseClient->error(begin, "Unsupported floating-point value for platform.");
+                    return {begin, nullptr};
+#endif  // __STDC_IEC_559__
                 case NULL_V:
                     return handleNull(begin, pos, parseClient);
                 default:
-                    parseClient->error(begin, "Unsupported floating-point or simple value.");
+                    parseClient->error(begin, "Unsupported half-floating-point or simple value.");
                     return {begin, nullptr};
             }
     }
