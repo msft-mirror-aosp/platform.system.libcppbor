@@ -1946,17 +1946,160 @@ TEST(FullParserTest, UnassignedSimpleValue) {
     auto [item, pos, message] = parse(unassignedSimpleValue);
     EXPECT_THAT(item, IsNull());
     EXPECT_EQ(pos, unassignedSimpleValue.data());
-    EXPECT_EQ("Unsupported floating-point or simple value.", message);
+    EXPECT_EQ("Unsupported half-floating-point or simple value.", message);
 }
 
+#ifdef __STDC_IEC_559__
 TEST(FullParserTest, FloatingPointValue) {
     vector<uint8_t> floatingPointValue = {0xFA, 0x12, 0x75, 0x34, 0x37};
+    float f_val = 7.737272847557572e-28;
 
     auto [item, pos, message] = parse(floatingPointValue);
-    EXPECT_THAT(item, IsNull());
-    EXPECT_EQ(pos, floatingPointValue.data());
-    EXPECT_EQ("Unsupported floating-point or simple value.", message);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asFloat()->value(), f_val);
+
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
 }
+
+TEST(FullParserTest, PositiveInfinityFloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0x7F, 0x80, 0x00, 0x00};
+    float f_val = std::numeric_limits<float>::infinity();
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asFloat()->value(), f_val);
+
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
+}
+
+TEST(FullParserTest, NegativeInfinityFloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0xFF, 0x80, 0x00, 0x00};
+    float f_val = -std::numeric_limits<float>::infinity();
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asFloat()->value(), f_val);
+
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
+}
+
+TEST(FullParserTest, QuietNaNFloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0x7F, 0xC0, 0x00, 0x00};
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_TRUE(std::isnan(item->asSimple()->asFloat()->value()));
+
+    float f_val = std::numeric_limits<float>::quiet_NaN();
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
+}
+
+TEST(FullParserTest, MaxFloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0x7F, 0x7F, 0xFF, 0xFF};
+    float f_val = std::numeric_limits<float>::max();
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asFloat()->value(), f_val);
+
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
+}
+
+TEST(FullParserTest, MinFloatingPointValue) {
+    vector<uint8_t> floatingPointValue = {0xFA, 0x00, 0x80, 0x00, 0x00};
+    float f_val = std::numeric_limits<float>::min();
+
+    auto [item, pos, message] = parse(floatingPointValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asFloat()->value(), f_val);
+
+    Float f(f_val);
+    EXPECT_EQ(f.encode(), floatingPointValue);
+}
+
+TEST(FullParserTest, DoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0x40, 0x09, 0x21, 0xFB, 0x4D, 0x12, 0xD8, 0x4A};
+    double d_val = 3.1415926000000001;
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asDouble()->value(), d_val);
+
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+
+TEST(FullParserTest, PositiveInfinityDoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0x7F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    double d_val = std::numeric_limits<double>::infinity();
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asDouble()->value(), d_val);
+
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+
+TEST(FullParserTest, NegativeInfinityDoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    double d_val = -std::numeric_limits<double>::infinity();
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asDouble()->value(), d_val);
+
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+
+TEST(FullParserTest, QuietNaNDoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0x7F, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_TRUE(std::isnan(item->asSimple()->asDouble()->value()));
+
+    double d_val = std::numeric_limits<double>::quiet_NaN();
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+
+TEST(FullParserTest, MaxDoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    double d_val = std::numeric_limits<double>::max();
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asDouble()->value(), d_val);
+
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+
+TEST(FullParserTest, MinDoubleValue) {
+    vector<uint8_t> doubleValue =
+            {0xFB, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    double d_val = std::numeric_limits<double>::min();
+
+    auto [item, pos, message] = parse(doubleValue);
+    EXPECT_THAT(item, NotNull());
+    EXPECT_EQ(item->asSimple()->asDouble()->value(), d_val);
+
+    Double d(d_val);
+    EXPECT_EQ(d.encode(), doubleValue);
+}
+#endif  // __STDC_IEC_559__
 
 TEST(MapGetValueByKeyTest, Map) {
     Array compoundItem(1, 2, 3, 4, 5, Map(4, 5, "a", "b"));
