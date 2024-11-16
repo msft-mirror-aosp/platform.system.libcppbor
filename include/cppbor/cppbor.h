@@ -18,7 +18,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -56,7 +58,9 @@ enum MajorType : uint8_t {
 
 enum SimpleType {
     BOOLEAN,
-    NULL_T,  // Only two supported, as yet.
+    NULL_T,
+    FLOAT,
+    DOUBLE,   // Only four supported, as yet.
 };
 
 enum SpecialAddlInfoValues : uint8_t {
@@ -66,7 +70,9 @@ enum SpecialAddlInfoValues : uint8_t {
     ONE_BYTE_LENGTH = 24,
     TWO_BYTE_LENGTH = 25,
     FOUR_BYTE_LENGTH = 26,
+    FLOAT_V = 26,
     EIGHT_BYTE_LENGTH = 27,
+    DOUBLE_V = 27,
     INDEFINITE_LENGTH = 31,
 };
 
@@ -85,6 +91,8 @@ class SemanticTag;
 class EncodedItem;
 class ViewTstr;
 class ViewBstr;
+class Float;
+class Double;
 
 /**
  * Returns the size of a CBOR header that contains the additional info value addlInfo.
@@ -148,6 +156,10 @@ class Item {
     const Bool* asBool() const { return const_cast<Item*>(this)->asBool(); }
     virtual Null* asNull() { return nullptr; }
     const Null* asNull() const { return const_cast<Item*>(this)->asNull(); }
+    virtual Float* asFloat() { return nullptr; }
+    const Float* asFloat() const { return const_cast<Item*>(this)->asFloat(); }
+    virtual Double* asDouble() { return nullptr; }
+    const Double* asDouble() const { return const_cast<Item*>(this)->asDouble(); }
 
     virtual Map* asMap() { return nullptr; }
     const Map* asMap() const { return const_cast<Item*>(this)->asMap(); }
@@ -925,6 +937,80 @@ class Null : public Simple {
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<Null>(); }
 };
+
+#ifdef __STDC_IEC_559__
+/**
+ * Float is a concrete type that implements CBOR major type 7, with additional item value for
+ * FLOAT.
+ */
+class Float : public Simple {
+ public:
+  static constexpr SimpleType kSimpleType = FLOAT;
+
+  explicit Float(float v) : mValue(v) {}
+
+  SimpleType simpleType() const override { return kSimpleType; }
+  Float* asFloat() override { return this; }
+
+  float value() const { return mValue; }
+  size_t encodedSize() const override { return 5; }
+
+  using Item::encode;
+  uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+      uint32_t bits;
+      std::memcpy(&bits, &mValue, sizeof(float));
+      return encodeHeader(bits, pos, end);
+  }
+  void encode(EncodeCallback encodeCallback) const override {
+      uint32_t bits;
+      std::memcpy(&bits, &mValue, sizeof(float));
+      encodeHeader(bits, encodeCallback);
+  }
+
+  std::unique_ptr<Item> clone() const override {
+    return std::make_unique<Float>(mValue);
+  }
+
+ private:
+    float mValue;
+};
+
+/**
+ * Double is a concrete type that implements CBOR major type 7, with additional item value for
+ * DOUBLE.
+ */
+class Double : public Simple {
+ public:
+  static constexpr SimpleType kSimpleType = DOUBLE;
+
+  explicit Double(double v) : mValue(v) {}
+
+  SimpleType simpleType() const override { return kSimpleType; }
+  Double* asDouble() override { return this; }
+
+  double value() const { return mValue; }
+  size_t encodedSize() const override { return 9; }
+
+  using Item::encode;
+  uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+      uint64_t bits;
+      std::memcpy(&bits, &mValue, sizeof(double));
+      return encodeHeader(bits, pos, end);
+  }
+  void encode(EncodeCallback encodeCallback) const override {
+      uint64_t bits;
+      std::memcpy(&bits, &mValue, sizeof(double));
+      encodeHeader(bits, encodeCallback);
+  }
+
+  std::unique_ptr<Item> clone() const override {
+    return std::make_unique<Double>(mValue);
+  }
+
+ private:
+    double mValue;
+};
+#endif  // __STDC_IEC_559__
 
 /**
  * Returns pretty-printed CBOR for |item|
