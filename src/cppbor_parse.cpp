@@ -16,11 +16,15 @@
 
 #include "cppbor_parse.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <stack>
 #include <type_traits>
+
 #include "cppbor.h"
 
 #ifndef __TRUSTY__
@@ -35,6 +39,7 @@ namespace cppbor {
 namespace {
 
 const unsigned kMaxParseDepth = 1000;
+const size_t kMaxReserveSize = 8192;
 
 std::string insufficientLengthString(size_t bytesNeeded, size_t bytesAvail,
                                      const std::string& type) {
@@ -99,6 +104,28 @@ std::tuple<const uint8_t*, ParseClient*> handleNull(const uint8_t* hdrBegin, con
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
 
+#ifdef __STDC_IEC_559__
+std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8_t* hdrBegin,
+                                                    const uint8_t* hdrEnd,
+                                                    ParseClient* parseClient) {
+    float f;
+    std::memcpy(&f, &value, sizeof(float));
+    std::unique_ptr<Item> item = std::make_unique<Float>(f);
+    return {hdrEnd,
+            parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
+}
+
+std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint8_t* hdrBegin,
+                                                    const uint8_t* hdrEnd,
+                                                    ParseClient* parseClient) {
+    double d;
+    std::memcpy(&d, &value, sizeof(double));
+    std::unique_ptr<Item> item = std::make_unique<Double>(d);
+    return {hdrEnd,
+            parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
+}
+#endif  // __STDC_IEC_559__
+
 template <typename T>
 std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uint8_t* hdrBegin,
                                                       const uint8_t* valueBegin, const uint8_t* end,
@@ -129,11 +156,10 @@ class IncompleteArray : public Array, public IncompleteItem {
     explicit IncompleteArray(std::optional<size_t> size) : mSize(size) {}
 
     // If the "complete" size is known, return it, otherwise return the current size.
-    size_t size() const override {
-        return mSize.value_or(Array::size());
-    }
+    size_t size() const override { return mSize.value_or(Array::size()); }
 
     void add(std::unique_ptr<Item> item) override {
+        if (mSize) mEntries.reserve(std::min(mSize.value(), kMaxReserveSize));
         mEntries.push_back(std::move(item));
     }
 
@@ -152,12 +178,11 @@ class IncompleteMap : public Map, public IncompleteItem {
     explicit IncompleteMap(std::optional<size_t> size) : mSize(size) {}
 
     // If the "complete" size is known, return it, otherwise return the current size.
-    size_t size() const override {
-        return mSize.value_or(Map::size());
-    }
+    size_t size() const override { return mSize.value_or(Map::size()); }
 
     void add(std::unique_ptr<Item> item) override {
         if (mKeyHeldForAdding) {
+            if (mSize) mEntries.reserve(std::min(mSize.value(), kMaxReserveSize));
             mEntries.push_back({std::move(mKeyHeldForAdding), std::move(item)});
         } else {
             mKeyHeldForAdding = std::move(item);
@@ -217,15 +242,15 @@ std::tuple<const uint8_t*, ParseClient*> handleEntries(std::optional<size_t> ent
                                                        const std::string& typeName, bool emitViews,
                                                        ParseClient* parseClient, unsigned depth) {
     while (entryCount.value_or(1) > 0) {
-        if(entryCount.has_value()) {
+        if (entryCount.has_value()) {
             --*entryCount;
         }
         if (pos == end) {
             parseClient->error(hdrBegin, "Not enough entries for " + typeName + ".");
             return {hdrBegin, nullptr /* end parsing */};
         }
-        if (*pos == 0xFF) {
-            // Next character is the "break" Stop Code
+        if (!entryCount.has_value() && *pos == 0xFF) {
+            // We're in an indeterminate-length object and found a stop code.
             ++pos;
             break;
         }
@@ -256,8 +281,7 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                                                           unsigned depth) {
     if (begin == end) {
         parseClient->error(
-                begin,
-                "Input buffer is empty. Begin and end cannot point to the same location.");
+                begin, "Input buffer is empty. Begin and end cannot point to the same location.");
         return {begin, nullptr};
     }
 
@@ -326,44 +350,53 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
 
         case BSTR:
             if (emitViews) {
-                return handleString<ViewBstr>(*addlData, begin, pos, end,
-                                              "byte string", parseClient);
+                return handleString<ViewBstr>(*addlData, begin, pos, end, "byte string",
+                                              parseClient);
             } else {
-                return handleString<Bstr>(*addlData, begin, pos, end,
-                                          "byte string", parseClient);
+                return handleString<Bstr>(*addlData, begin, pos, end, "byte string", parseClient);
             }
 
         case TSTR:
             if (emitViews) {
-                return handleString<ViewTstr>(*addlData, begin, pos, end,
-                                              "text string", parseClient);
+                return handleString<ViewTstr>(*addlData, begin, pos, end, "text string",
+                                              parseClient);
             } else {
-                return handleString<Tstr>(*addlData, begin, pos, end,
-                                          "text string", parseClient);
+                return handleString<Tstr>(*addlData, begin, pos, end, "text string", parseClient);
             }
 
         case ARRAY:
-            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData,
-                                  begin, pos, end, "array", emitViews, parseClient, depth);
+            return handleCompound(std::make_unique<IncompleteArray>(addlData), addlData, begin, pos,
+                                  end, "array", emitViews, parseClient, depth);
 
         case MAP:
             return handleCompound(std::make_unique<IncompleteMap>(addlData),
-                    addlData.has_value() ? *addlData * 2 : addlData, begin, pos, end,
-                    "map", emitViews, parseClient, depth);
+                                  addlData.has_value() ? *addlData * 2 : addlData, begin, pos, end,
+                                  "map", emitViews, parseClient, depth);
 
         case SEMANTIC:
             return handleCompound(std::make_unique<IncompleteSemanticTag>(*addlData), 1, begin, pos,
                                   end, "semantic", emitViews, parseClient, depth);
 
         case SIMPLE:
-            switch (*addlData) {
+            switch (tagInt) {
                 case TRUE:
                 case FALSE:
                     return handleBool(*addlData, begin, pos, parseClient);
+#ifdef __STDC_IEC_559__
+                case FLOAT_V:
+                    return handleFloat(*addlData, begin, pos, parseClient);
+                case DOUBLE_V:
+                    return handleDouble(*addlData, begin, pos, parseClient);
+#else
+                case FLOAT_V:
+                case DOUBLE_V:
+                    parseClient->error(begin, "Unsupported floating-point value for platform.");
+                    return {begin, nullptr};
+#endif  // __STDC_IEC_559__
                 case NULL_V:
                     return handleNull(begin, pos, parseClient);
                 default:
-                    parseClient->error(begin, "Unsupported floating-point or simple value.");
+                    parseClient->error(begin, "Unsupported half-floating-point or simple value.");
                     return {begin, nullptr};
             }
     }
