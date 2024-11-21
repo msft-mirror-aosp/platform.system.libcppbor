@@ -447,10 +447,11 @@ class Bstr : public Item {
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<Bstr>(mValue); }
 
+  protected:
+    std::vector<uint8_t> mValue;
+
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
-
-    std::vector<uint8_t> mValue;
 };
 
 /**
@@ -511,6 +512,9 @@ class Tstr : public Item {
   public:
     static constexpr MajorType kMajorType = TSTR;
 
+    // Construct an empty Tstr
+    explicit Tstr() {}
+
     // Construct from a string
     explicit Tstr(std::string v) : mValue(std::move(v)) {}
 
@@ -550,10 +554,11 @@ class Tstr : public Item {
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<Tstr>(mValue); }
 
+  protected:
+    std::string mValue;
+
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
-
-    std::string mValue;
 };
 
 /**
