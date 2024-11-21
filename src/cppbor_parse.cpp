@@ -106,8 +106,8 @@ std::tuple<const uint8_t*, ParseClient*> handleNull(const uint8_t* hdrBegin, con
 
 #ifdef __STDC_IEC_559__
 std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8_t* hdrBegin,
-                                                    const uint8_t* hdrEnd,
-                                                    ParseClient* parseClient) {
+                                                     const uint8_t* hdrEnd,
+                                                     ParseClient* parseClient) {
     float f;
     std::memcpy(&f, &value, sizeof(float));
     std::unique_ptr<Item> item = std::make_unique<Float>(f);
@@ -116,8 +116,8 @@ std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8
 }
 
 std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint8_t* hdrBegin,
-                                                    const uint8_t* hdrEnd,
-                                                    ParseClient* parseClient) {
+                                                      const uint8_t* hdrEnd,
+                                                      ParseClient* parseClient) {
     double d;
     std::memcpy(&d, &value, sizeof(double));
     std::unique_ptr<Item> item = std::make_unique<Double>(d);

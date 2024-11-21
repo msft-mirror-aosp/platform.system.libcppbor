@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <sstream>
@@ -2095,8 +2096,7 @@ TEST(FullParserTest, MinFloatingPointValue) {
 }
 
 TEST(FullParserTest, DoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0x40, 0x09, 0x21, 0xFB, 0x4D, 0x12, 0xD8, 0x4A};
+    vector<uint8_t> doubleValue = {0xFB, 0x40, 0x09, 0x21, 0xFB, 0x4D, 0x12, 0xD8, 0x4A};
     double d_val = 3.1415926000000001;
 
     auto [item, pos, message] = parse(doubleValue);
@@ -2108,8 +2108,7 @@ TEST(FullParserTest, DoubleValue) {
 }
 
 TEST(FullParserTest, PositiveInfinityDoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0x7F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    vector<uint8_t> doubleValue = {0xFB, 0x7F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     double d_val = std::numeric_limits<double>::infinity();
 
     auto [item, pos, message] = parse(doubleValue);
@@ -2121,8 +2120,7 @@ TEST(FullParserTest, PositiveInfinityDoubleValue) {
 }
 
 TEST(FullParserTest, NegativeInfinityDoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    vector<uint8_t> doubleValue = {0xFB, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     double d_val = -std::numeric_limits<double>::infinity();
 
     auto [item, pos, message] = parse(doubleValue);
@@ -2134,8 +2132,7 @@ TEST(FullParserTest, NegativeInfinityDoubleValue) {
 }
 
 TEST(FullParserTest, QuietNaNDoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0x7F, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    vector<uint8_t> doubleValue = {0xFB, 0x7F, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
     auto [item, pos, message] = parse(doubleValue);
     EXPECT_THAT(item, NotNull());
@@ -2147,8 +2144,7 @@ TEST(FullParserTest, QuietNaNDoubleValue) {
 }
 
 TEST(FullParserTest, MaxDoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    vector<uint8_t> doubleValue = {0xFB, 0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     double d_val = std::numeric_limits<double>::max();
 
     auto [item, pos, message] = parse(doubleValue);
@@ -2160,8 +2156,7 @@ TEST(FullParserTest, MaxDoubleValue) {
 }
 
 TEST(FullParserTest, MinDoubleValue) {
-    vector<uint8_t> doubleValue =
-            {0xFB, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    vector<uint8_t> doubleValue = {0xFB, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     double d_val = std::numeric_limits<double>::min();
 
     auto [item, pos, message] = parse(doubleValue);
