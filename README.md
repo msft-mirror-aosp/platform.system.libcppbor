@@ -9,7 +9,7 @@ are planned.  CBOR features that aren't supported include:
 * Parsing Indefinite length values for major types 2 (byte string) and 3 (text string)
 * Writing Indefinite length values
 * Semantic tagging
-* Floating point
+* Half floating point
 
 LibCppBor requires C++-17.
 
@@ -38,7 +38,10 @@ they correspond.  They are:
   variable-length array of pairs of `Item`s.
 * `Simple` corresponds to major type 7.  It's an abstract class since
   items require more specific type.
-* `Bool` is the only currently-implemented subclass of `Simple`.
+* `Bool` is implemented as a subclass of `Simple`.
+* `Null` is implemented as a subclass of `Simple`.
+* `Float` is implemented as a subclass of `Simple`.
+* `Double` is implemented as a subclass of `Simple`.
 
 Note that major type 6, semantic tag, is not yet implemented.
 
