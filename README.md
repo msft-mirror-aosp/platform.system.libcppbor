@@ -6,7 +6,7 @@ parsing CBOR messages.  It does not (yet) support all features of
 CBOR, nor (yet) support validation against CDDL schemata, though both
 are planned.  CBOR features that aren't supported include:
 
-* Parsing Indefinite length values for major types 2 (byte string) and 3 (text string)
+* Parsing Indefinite length view-only values for major types 2 (byte string) and 3 (text string)
 * Writing Indefinite length values
 * Semantic tagging
 * Half floating point
