@@ -60,7 +60,7 @@ enum SimpleType {
     BOOLEAN,
     NULL_T,
     FLOAT,
-    DOUBLE,   // Only four supported, as yet.
+    DOUBLE,  // Only four supported, as yet.
 };
 
 enum SpecialAddlInfoValues : uint8_t {
@@ -949,34 +949,32 @@ class Null : public Simple {
  * FLOAT.
  */
 class Float : public Simple {
- public:
-  static constexpr SimpleType kSimpleType = FLOAT;
+  public:
+    static constexpr SimpleType kSimpleType = FLOAT;
 
-  explicit Float(float v) : mValue(v) {}
+    explicit Float(float v) : mValue(v) {}
 
-  SimpleType simpleType() const override { return kSimpleType; }
-  Float* asFloat() override { return this; }
+    SimpleType simpleType() const override { return kSimpleType; }
+    Float* asFloat() override { return this; }
 
-  float value() const { return mValue; }
-  size_t encodedSize() const override { return 5; }
+    float value() const { return mValue; }
+    size_t encodedSize() const override { return 5; }
 
-  using Item::encode;
-  uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
-      uint32_t bits;
-      std::memcpy(&bits, &mValue, sizeof(float));
-      return encodeHeader(bits, pos, end);
-  }
-  void encode(EncodeCallback encodeCallback) const override {
-      uint32_t bits;
-      std::memcpy(&bits, &mValue, sizeof(float));
-      encodeHeader(bits, encodeCallback);
-  }
+    using Item::encode;
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+        uint32_t bits;
+        std::memcpy(&bits, &mValue, sizeof(float));
+        return encodeHeader(bits, pos, end);
+    }
+    void encode(EncodeCallback encodeCallback) const override {
+        uint32_t bits;
+        std::memcpy(&bits, &mValue, sizeof(float));
+        encodeHeader(bits, encodeCallback);
+    }
 
-  std::unique_ptr<Item> clone() const override {
-    return std::make_unique<Float>(mValue);
-  }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Float>(mValue); }
 
- private:
+  private:
     float mValue;
 };
 
@@ -985,34 +983,32 @@ class Float : public Simple {
  * DOUBLE.
  */
 class Double : public Simple {
- public:
-  static constexpr SimpleType kSimpleType = DOUBLE;
+  public:
+    static constexpr SimpleType kSimpleType = DOUBLE;
 
-  explicit Double(double v) : mValue(v) {}
+    explicit Double(double v) : mValue(v) {}
 
-  SimpleType simpleType() const override { return kSimpleType; }
-  Double* asDouble() override { return this; }
+    SimpleType simpleType() const override { return kSimpleType; }
+    Double* asDouble() override { return this; }
 
-  double value() const { return mValue; }
-  size_t encodedSize() const override { return 9; }
+    double value() const { return mValue; }
+    size_t encodedSize() const override { return 9; }
 
-  using Item::encode;
-  uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
-      uint64_t bits;
-      std::memcpy(&bits, &mValue, sizeof(double));
-      return encodeHeader(bits, pos, end);
-  }
-  void encode(EncodeCallback encodeCallback) const override {
-      uint64_t bits;
-      std::memcpy(&bits, &mValue, sizeof(double));
-      encodeHeader(bits, encodeCallback);
-  }
+    using Item::encode;
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+        uint64_t bits;
+        std::memcpy(&bits, &mValue, sizeof(double));
+        return encodeHeader(bits, pos, end);
+    }
+    void encode(EncodeCallback encodeCallback) const override {
+        uint64_t bits;
+        std::memcpy(&bits, &mValue, sizeof(double));
+        encodeHeader(bits, encodeCallback);
+    }
 
-  std::unique_ptr<Item> clone() const override {
-    return std::make_unique<Double>(mValue);
-  }
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Double>(mValue); }
 
- private:
+  private:
     double mValue;
 };
 #endif  // __STDC_IEC_559__
