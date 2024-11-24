@@ -106,8 +106,8 @@ std::tuple<const uint8_t*, ParseClient*> handleNull(const uint8_t* hdrBegin, con
 
 #ifdef __STDC_IEC_559__
 std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8_t* hdrBegin,
-                                                    const uint8_t* hdrEnd,
-                                                    ParseClient* parseClient) {
+                                                     const uint8_t* hdrEnd,
+                                                     ParseClient* parseClient) {
     float f;
     std::memcpy(&f, &value, sizeof(float));
     std::unique_ptr<Item> item = std::make_unique<Float>(f);
@@ -116,8 +116,8 @@ std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8
 }
 
 std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint8_t* hdrBegin,
-                                                    const uint8_t* hdrEnd,
-                                                    ParseClient* parseClient) {
+                                                      const uint8_t* hdrEnd,
+                                                      ParseClient* parseClient) {
     double d;
     std::memcpy(&d, &value, sizeof(double));
     std::unique_ptr<Item> item = std::make_unique<Double>(d);
@@ -142,6 +142,33 @@ std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uin
             parseClient->item(item, hdrBegin, valueBegin, valueBegin + length)};
 }
 
+std::tuple<const uint8_t*, ParseClient*> handleIncompleteString(
+        std::unique_ptr<Item> item, const uint8_t* hdrBegin, const uint8_t* valueBegin,
+        const uint8_t* end, const std::string& errLabel, bool emitViews, ParseClient* parseClient,
+        unsigned depth) {
+    parseClient =
+            parseClient->item(item, hdrBegin, valueBegin, valueBegin /* don't know the end yet */);
+    if (!parseClient) return {hdrBegin, nullptr};
+
+    const uint8_t* pos = valueBegin;
+    while (true) {
+        if (pos == end) {
+            parseClient->error(hdrBegin, "Not enough entries for " + errLabel + ".");
+            return {hdrBegin, nullptr /* end parsing */};
+        }
+        if (*pos == 0xFF) {
+            // We found a stop code.
+            ++pos;
+            break;
+        }
+        std::tie(pos, parseClient) = parseRecursively(pos, end, emitViews, parseClient, depth + 1);
+        if (!parseClient) return {hdrBegin, nullptr};
+    }
+    if (!parseClient) return {hdrBegin, nullptr};
+
+    return {pos, parseClient->itemEnd(item, hdrBegin, valueBegin, pos)};
+}
+
 class IncompleteItem {
   public:
     static IncompleteItem* cast(Item* item);
@@ -149,6 +176,50 @@ class IncompleteItem {
     virtual ~IncompleteItem() {}
     virtual void add(std::unique_ptr<Item> item) = 0;
     virtual std::unique_ptr<Item> finalize() && = 0;
+};
+
+class IncompleteBstr : public Bstr, public IncompleteItem {
+  public:
+    explicit IncompleteBstr() {}
+
+    // The finalized version creates a copy which will not have this overridden.
+    bool isCompound() const override { return true; }
+
+    void add(std::unique_ptr<Item> item) override {
+        if (item->type() == BSTR) {
+            mValue.insert(mValue.end(), item->asBstr()->moveValue().begin(),
+                          item->asBstr()->moveValue().end());
+        } else {
+#ifndef __TRUSTY__
+            LOG(FATAL) << "Should not happen: Expected BSTR";
+#endif  // __TRUSTY__
+        }
+    }
+
+    std::unique_ptr<Item> finalize() && override { return std::make_unique<Bstr>(mValue); }
+};
+
+class IncompleteTstr : public Tstr, public IncompleteItem {
+  public:
+    explicit IncompleteTstr() {}
+
+    // The finalized version creates a copy which will not have this overridden.
+    bool isCompound() const override { return true; }
+
+    void add(std::unique_ptr<Item> item) override {
+        if (item->type() == TSTR) {
+            ss << item->asTstr()->moveValue();
+        } else {
+#ifndef __TRUSTY__
+            LOG(FATAL) << "Should not happen: Expected TSTR";
+#endif  // __TRUSTY__
+        }
+    }
+
+    std::unique_ptr<Item> finalize() && override { return std::make_unique<Tstr>(ss.str()); }
+
+  private:
+    std::stringstream ss;
 };
 
 class IncompleteArray : public Array, public IncompleteItem {
@@ -230,6 +301,16 @@ IncompleteItem* IncompleteItem::cast(Item* item) {
         CHECK(dynamic_cast<IncompleteMap*>(item));
 #endif
         return static_cast<IncompleteMap*>(item);
+    } else if (item->type() == BSTR) {
+#if __has_feature(cxx_rtti)
+        CHECK(dynamic_cast<IncompleteBstr*>(item));
+#endif
+        return static_cast<IncompleteBstr*>(item);
+    } else if (item->type() == TSTR) {
+#if __has_feature(cxx_rtti)
+        CHECK(dynamic_cast<IncompleteTstr*>(item));
+#endif
+        return static_cast<IncompleteTstr*>(item);
     } else {
         CHECK(false);  // Impossible to get here.
     }
@@ -326,7 +407,9 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                 break;
 
             case INDEFINITE_LENGTH:
-                if (type != ARRAY && type != MAP) {
+                // View only strings are not yet supported due to their disjoint nature.
+                if (type != ARRAY && type != MAP && !(type == BSTR && !emitViews) &&
+                    !(type == TSTR && !emitViews)) {
                     parseClient->error(begin, "Unsupported indefinite length item.");
                     return {begin, nullptr};
                 }
@@ -349,7 +432,10 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
             return handleNint(*addlData, begin, pos, parseClient);
 
         case BSTR:
-            if (emitViews) {
+            if (!addlData.has_value()) {
+                return handleIncompleteString(std::make_unique<IncompleteBstr>(), begin, pos, end,
+                                              "byte string", emitViews, parseClient, depth);
+            } else if (emitViews) {
                 return handleString<ViewBstr>(*addlData, begin, pos, end, "byte string",
                                               parseClient);
             } else {
@@ -357,7 +443,10 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
             }
 
         case TSTR:
-            if (emitViews) {
+            if (!addlData.has_value()) {
+                return handleIncompleteString(std::make_unique<IncompleteTstr>(), begin, pos, end,
+                                              "text string", emitViews, parseClient, depth);
+            } else if (emitViews) {
                 return handleString<ViewTstr>(*addlData, begin, pos, end, "text string",
                                               parseClient);
             } else {
@@ -422,8 +511,7 @@ class FullParseClient : public ParseClient {
             mParentStack.push(item.get());
             return this;
         } else {
-            appendToLastParent(std::move(item));
-            return this;
+            return appendToLastParent(std::move(item));
         }
     }
 
@@ -439,8 +527,7 @@ class FullParseClient : public ParseClient {
             mPosition = end;
             return nullptr;  // We're done
         } else {
-            appendToLastParent(std::move(finalizedItem));
-            return this;
+            return appendToLastParent(std::move(finalizedItem));
         }
     }
 
@@ -457,9 +544,28 @@ class FullParseClient : public ParseClient {
     }
 
   private:
-    void appendToLastParent(std::unique_ptr<Item> item) {
+    ParseClient* appendToLastParent(std::unique_ptr<Item> item) {
         auto parent = mParentStack.top();
-        IncompleteItem::cast(parent)->add(std::move(item));
+        switch (parent->type()) {
+            case BSTR:
+                if (item->type() != BSTR) {
+                    mErrorMessage += "Expected BSTR in indefinite-length string.";
+                    return nullptr;
+                }
+                IncompleteItem::cast(parent)->add(std::move(item));
+                break;
+            case TSTR:
+                if (item->type() != TSTR) {
+                    mErrorMessage += "Expected TSTR in indefinite-length string.";
+                    return nullptr;
+                }
+                IncompleteItem::cast(parent)->add(std::move(item));
+                break;
+            default:
+                IncompleteItem::cast(parent)->add(std::move(item));
+                break;
+        }
+        return this;
     }
 
     std::unique_ptr<Item> mTheItem;
