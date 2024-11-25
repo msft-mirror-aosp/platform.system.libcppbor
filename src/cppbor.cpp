@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <openssl/sha.h>
 #include <cstdint>
+#include <cstdio>
 
 #include "cppbor_parse.h"
 
@@ -237,17 +238,35 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
         } break;
 
         case SIMPLE:
-            const Bool* asBool = item->asSimple()->asBool();
-            const Null* asNull = item->asSimple()->asNull();
-            if (asBool != nullptr) {
-                out.append(asBool->value() ? "true" : "false");
-            } else if (asNull != nullptr) {
-                out.append("null");
-            } else {
+            switch (item->asSimple()->simpleType()) {
+                case BOOLEAN:
+                    out.append(item->asSimple()->asBool()->value() ? "true" : "false");
+                    break;
+                case NULL_T:
+                    out.append("null");
+                    break;
+#ifdef __STDC_IEC_559__
+                case FLOAT:
+                    snprintf(buf, sizeof(buf), "%f", item->asSimple()->asFloat()->value());
+                    out.append(buf);
+                    break;
+                case DOUBLE:
+                    snprintf(buf, sizeof(buf), "%f", item->asSimple()->asDouble()->value());
+                    out.append(buf);
+                    break;
+#else
+                case FLOAT:
+                case DOUBLE:
 #ifndef __TRUSTY__
-                LOG(ERROR) << "Only boolean/null is implemented for SIMPLE";
+                    LOG(ERROR) << "float/double not supported for this platform.";
 #endif  // __TRUSTY__
-                return false;
+                    return false;
+#endif  // __STDC_IEC_559__
+                default:
+#ifndef __TRUSTY__
+                    LOG(ERROR) << "Only boolean/null/float/double is implemented for SIMPLE";
+#endif  // __TRUSTY__
+                    return false;
             }
             break;
     }
@@ -372,6 +391,12 @@ bool Simple::operator==(const Simple& other) const& {
             return *asBool() == *(other.asBool());
         case NULL_T:
             return true;
+#ifdef __STDC_IEC_559__
+        case FLOAT:
+            return *asFloat() == *(other.asFloat());
+        case DOUBLE:
+            return *asDouble() == *(other.asDouble());
+#endif  // __STDC_IEC_559__
         default:
             CHECK(false);  // Impossible to get here.
             return false;
