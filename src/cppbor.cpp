@@ -261,7 +261,7 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
                     LOG(ERROR) << "float/double not supported for this platform.";
 #endif  // __TRUSTY__
                     return false;
-                #endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__
                 default:
 #ifndef __TRUSTY__
                     LOG(ERROR) << "Only boolean/null/float/double is implemented for SIMPLE";
