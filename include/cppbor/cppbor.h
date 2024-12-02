@@ -943,7 +943,7 @@ class Null : public Simple {
     std::unique_ptr<Item> clone() const override { return std::make_unique<Null>(); }
 };
 
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 /**
  * Float is a concrete type that implements CBOR major type 7, with additional item value for
  * FLOAT.
@@ -977,7 +977,9 @@ class Float : public Simple {
   private:
     float mValue;
 };
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 /**
  * Double is a concrete type that implements CBOR major type 7, with additional item value for
  * DOUBLE.
@@ -1011,7 +1013,7 @@ class Double : public Simple {
   private:
     double mValue;
 };
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 
 /**
  * Returns pretty-printed CBOR for |item|

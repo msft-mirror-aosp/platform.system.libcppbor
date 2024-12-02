@@ -245,23 +245,28 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
                 case NULL_T:
                     out.append("null");
                     break;
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                 case FLOAT:
                     snprintf(buf, sizeof(buf), "%f", item->asSimple()->asFloat()->value());
                     out.append(buf);
                     break;
+#ifndef __TRUSTY__
+                    LOG(ERROR) << "float not supported for this platform.";
+#endif  // __TRUSTY__
+                    return false;
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                 case DOUBLE:
                     snprintf(buf, sizeof(buf), "%f", item->asSimple()->asDouble()->value());
                     out.append(buf);
                     break;
 #else
-                case FLOAT:
                 case DOUBLE:
 #ifndef __TRUSTY__
-                    LOG(ERROR) << "float/double not supported for this platform.";
+                    LOG(ERROR) << "double not supported for this platform.";
 #endif  // __TRUSTY__
                     return false;
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                 default:
 #ifndef __TRUSTY__
                     LOG(ERROR) << "Only boolean/null/float/double is implemented for SIMPLE";
@@ -391,12 +396,14 @@ bool Simple::operator==(const Simple& other) const& {
             return *asBool() == *(other.asBool());
         case NULL_T:
             return true;
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
         case FLOAT:
             return *asFloat() == *(other.asFloat());
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
         case DOUBLE:
             return *asDouble() == *(other.asDouble());
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
         default:
             CHECK(false);  // Impossible to get here.
             return false;

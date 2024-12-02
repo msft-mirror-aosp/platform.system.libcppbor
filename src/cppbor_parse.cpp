@@ -104,7 +104,7 @@ std::tuple<const uint8_t*, ParseClient*> handleNull(const uint8_t* hdrBegin, con
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
 
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8_t* hdrBegin,
                                                      const uint8_t* hdrEnd,
                                                      ParseClient* parseClient) {
@@ -114,7 +114,9 @@ std::tuple<const uint8_t*, ParseClient*> handleFloat(uint32_t value, const uint8
     return {hdrEnd,
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint8_t* hdrBegin,
                                                       const uint8_t* hdrEnd,
                                                       ParseClient* parseClient) {
@@ -124,7 +126,7 @@ std::tuple<const uint8_t*, ParseClient*> handleDouble(uint64_t value, const uint
     return {hdrEnd,
             parseClient->item(item, hdrBegin, hdrEnd /* valueBegin */, hdrEnd /* itemEnd */)};
 }
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 
 template <typename T>
 std::tuple<const uint8_t*, ParseClient*> handleString(uint64_t length, const uint8_t* hdrBegin,
@@ -471,17 +473,22 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                 case TRUE:
                 case FALSE:
                     return handleBool(*addlData, begin, pos, parseClient);
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                 case FLOAT_V:
                     return handleFloat(*addlData, begin, pos, parseClient);
+#else
+                case FLOAT_V:
+                    parseClient->error(begin, "Value float is not supported for platform.");
+                    return {begin, nullptr};
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                 case DOUBLE_V:
                     return handleDouble(*addlData, begin, pos, parseClient);
 #else
-                case FLOAT_V:
                 case DOUBLE_V:
-                    parseClient->error(begin, "Unsupported floating-point value for platform.");
+                    parseClient->error(begin, "Value double is not supported for platform.");
                     return {begin, nullptr};
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                 case NULL_V:
                     return handleNull(begin, pos, parseClient);
                 default:
