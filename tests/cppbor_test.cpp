@@ -2022,7 +2022,7 @@ TEST(FullParserTest, UnassignedSimpleValue) {
     EXPECT_EQ("Unsupported half-floating-point or simple value.", message);
 }
 
-#ifdef __STDC_IEC_559__
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 TEST(FullParserTest, FloatingPointValue) {
     vector<uint8_t> floatingPointValue = {0xFA, 0x12, 0x75, 0x34, 0x37};
     float f_val = 7.737272847557572e-28;
@@ -2094,7 +2094,9 @@ TEST(FullParserTest, MinFloatingPointValue) {
     Float f(f_val);
     EXPECT_EQ(f.encode(), floatingPointValue);
 }
+#endif  // defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
 
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 TEST(FullParserTest, DoubleValue) {
     vector<uint8_t> doubleValue = {0xFB, 0x40, 0x09, 0x21, 0xFB, 0x4D, 0x12, 0xD8, 0x4A};
     double d_val = 3.1415926000000001;
@@ -2166,7 +2168,7 @@ TEST(FullParserTest, MinDoubleValue) {
     Double d(d_val);
     EXPECT_EQ(d.encode(), doubleValue);
 }
-#endif  // __STDC_IEC_559__
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
 
 TEST(MapGetValueByKeyTest, Map) {
     Array compoundItem(1, 2, 3, 4, 5, Map(4, 5, "a", "b"));
