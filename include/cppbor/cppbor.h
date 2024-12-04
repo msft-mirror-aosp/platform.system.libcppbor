@@ -25,10 +25,15 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+#include <span>
+#else  // not ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+#include "span.h"
+#endif  // not ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
 
 #ifdef OS_WINDOWS
 #include <basetsd.h>
@@ -44,6 +49,10 @@
 #endif  // FALSE
 
 namespace cppbor {
+
+#if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+using std::span;
+#endif  // ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
 
 enum MajorType : uint8_t {
     UINT = 0 << 5,
@@ -455,7 +464,7 @@ class Bstr : public Item {
 };
 
 /**
- * ViewBstr is a read-only version of Bstr backed by std::span
+ * ViewBstr is a read-only version of Bstr backed by span
  */
 class ViewBstr : public Item {
   public:
@@ -465,7 +474,7 @@ class ViewBstr : public Item {
     explicit ViewBstr() {}
 
     // Construct from a span of uint8_t values
-    explicit ViewBstr(std::span<const uint8_t> v) : mView(std::move(v)) {}
+    explicit ViewBstr(span<const uint8_t> v) : mView(std::move(v)) {}
 
     // Construct from a string_view
     explicit ViewBstr(std::string_view v)
@@ -495,14 +504,14 @@ class ViewBstr : public Item {
         encodeValue(encodeCallback);
     }
 
-    const std::span<const uint8_t>& view() const { return mView; }
+    const span<const uint8_t>& view() const { return mView; }
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<ViewBstr>(mView); }
 
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
 
-    std::span<const uint8_t> mView;
+    span<const uint8_t> mView;
 };
 
 /**
