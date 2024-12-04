@@ -245,23 +245,23 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
                 case NULL_T:
                     out.append("null");
                     break;
-#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                 case FLOAT:
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                     snprintf(buf, sizeof(buf), "%f", item->asSimple()->asFloat()->value());
                     out.append(buf);
                     break;
+#else
 #ifndef __TRUSTY__
                     LOG(ERROR) << "float not supported for this platform.";
-#endif  // __TRUSTY__
+#endif // __TRUSTY__
                     return false;
-#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
-#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+#endif // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                 case DOUBLE:
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                     snprintf(buf, sizeof(buf), "%f", item->asSimple()->asDouble()->value());
                     out.append(buf);
                     break;
 #else
-                case DOUBLE:
 #ifndef __TRUSTY__
                     LOG(ERROR) << "double not supported for this platform.";
 #endif  // __TRUSTY__
