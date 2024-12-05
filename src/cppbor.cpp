@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <openssl/sha.h>
 #include <cstdint>
+#include <cstdio>
 
 #include "cppbor_parse.h"
 
@@ -237,17 +238,40 @@ bool prettyPrintInternal(const Item* item, string& out, size_t indent, size_t ma
         } break;
 
         case SIMPLE:
-            const Bool* asBool = item->asSimple()->asBool();
-            const Null* asNull = item->asSimple()->asNull();
-            if (asBool != nullptr) {
-                out.append(asBool->value() ? "true" : "false");
-            } else if (asNull != nullptr) {
-                out.append("null");
-            } else {
+            switch (item->asSimple()->simpleType()) {
+                case BOOLEAN:
+                    out.append(item->asSimple()->asBool()->value() ? "true" : "false");
+                    break;
+                case NULL_T:
+                    out.append("null");
+                    break;
+                case FLOAT:
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+                    snprintf(buf, sizeof(buf), "%f", item->asSimple()->asFloat()->value());
+                    out.append(buf);
+                    break;
+#else
 #ifndef __TRUSTY__
-                LOG(ERROR) << "Only boolean/null is implemented for SIMPLE";
+                    LOG(ERROR) << "float not supported for this platform.";
+#endif // __TRUSTY__
+                    return false;
+#endif // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+                case DOUBLE:
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+                    snprintf(buf, sizeof(buf), "%f", item->asSimple()->asDouble()->value());
+                    out.append(buf);
+                    break;
+#else
+#ifndef __TRUSTY__
+                    LOG(ERROR) << "double not supported for this platform.";
 #endif  // __TRUSTY__
-                return false;
+                    return false;
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+                default:
+#ifndef __TRUSTY__
+                    LOG(ERROR) << "Only boolean/null/float/double is implemented for SIMPLE";
+#endif  // __TRUSTY__
+                    return false;
             }
             break;
     }
@@ -372,6 +396,14 @@ bool Simple::operator==(const Simple& other) const& {
             return *asBool() == *(other.asBool());
         case NULL_T:
             return true;
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+        case FLOAT:
+            return *asFloat() == *(other.asFloat());
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+        case DOUBLE:
+            return *asDouble() == *(other.asDouble());
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
         default:
             CHECK(false);  // Impossible to get here.
             return false;
