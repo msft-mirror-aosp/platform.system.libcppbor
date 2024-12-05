@@ -473,19 +473,17 @@ std::tuple<const uint8_t*, ParseClient*> parseRecursively(const uint8_t* begin, 
                 case TRUE:
                 case FALSE:
                     return handleBool(*addlData, begin, pos, parseClient);
-#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                 case FLOAT_V:
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
                     return handleFloat(*addlData, begin, pos, parseClient);
 #else
-                case FLOAT_V:
                     parseClient->error(begin, "Value float is not supported for platform.");
                     return {begin, nullptr};
 #endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
-#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                 case DOUBLE_V:
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
                     return handleDouble(*addlData, begin, pos, parseClient);
 #else
-                case DOUBLE_V:
                     parseClient->error(begin, "Value double is not supported for platform.");
                     return {begin, nullptr};
 #endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
