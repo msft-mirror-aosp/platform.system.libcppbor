@@ -23,6 +23,7 @@
 #include <optional>
 #include <sstream>
 #include <stack>
+#include <tuple>
 #include <type_traits>
 
 #include "cppbor.h"

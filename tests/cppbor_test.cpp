@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
