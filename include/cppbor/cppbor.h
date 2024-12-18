@@ -18,31 +18,41 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <algorithm>
+
+#if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+#include <span>
+#else  // not ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+#include "span.h"
+#endif  // not ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
 
 #ifdef OS_WINDOWS
 #include <basetsd.h>
 
 #define ssize_t SSIZE_T
-#endif // OS_WINDOWS
+#endif  // OS_WINDOWS
 
 #ifdef TRUE
 #undef TRUE
-#endif // TRUE
+#endif  // TRUE
 #ifdef FALSE
 #undef FALSE
-#endif // FALSE
+#endif  // FALSE
 
 namespace cppbor {
+
+#if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
+using std::span;
+#endif  // ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L || __cplusplus >= 202002L
 
 enum MajorType : uint8_t {
     UINT = 0 << 5,
@@ -57,7 +67,9 @@ enum MajorType : uint8_t {
 
 enum SimpleType {
     BOOLEAN,
-    NULL_T,  // Only two supported, as yet.
+    NULL_T,
+    FLOAT,
+    DOUBLE,  // Only four supported, as yet.
 };
 
 enum SpecialAddlInfoValues : uint8_t {
@@ -67,7 +79,9 @@ enum SpecialAddlInfoValues : uint8_t {
     ONE_BYTE_LENGTH = 24,
     TWO_BYTE_LENGTH = 25,
     FOUR_BYTE_LENGTH = 26,
+    FLOAT_V = 26,
     EIGHT_BYTE_LENGTH = 27,
+    DOUBLE_V = 27,
     INDEFINITE_LENGTH = 31,
 };
 
@@ -86,6 +100,8 @@ class SemanticTag;
 class EncodedItem;
 class ViewTstr;
 class ViewBstr;
+class Float;
+class Double;
 
 /**
  * Returns the size of a CBOR header that contains the additional info value addlInfo.
@@ -149,6 +165,10 @@ class Item {
     const Bool* asBool() const { return const_cast<Item*>(this)->asBool(); }
     virtual Null* asNull() { return nullptr; }
     const Null* asNull() const { return const_cast<Item*>(this)->asNull(); }
+    virtual Float* asFloat() { return nullptr; }
+    const Float* asFloat() const { return const_cast<Item*>(this)->asFloat(); }
+    virtual Double* asDouble() { return nullptr; }
+    const Double* asDouble() const { return const_cast<Item*>(this)->asDouble(); }
 
     virtual Map* asMap() { return nullptr; }
     const Map* asMap() const { return const_cast<Item*>(this)->asMap(); }
@@ -185,8 +205,8 @@ class Item {
      *
      * The tstr "AES" is tagged with 6.  The combined entity ("AES" tagged with 6) is tagged with 5,
      * etc.  So in this example, semanticTagCount() would return 3, and semanticTag(0) would return
-     * 5 semanticTag(1) would return 5 and semanticTag(2) would return 4.  For values of n > 2,
-     * semanticTag(n) will return 0, but this is a meaningless value.
+     * 6, semanticTag(1) would return 5, and semanticTag(2) would return 4.  For values of n > 2,
+     * semanticTag(n) would return 0, but this is a meaningless value.
      *
      * If this layering is confusing, you probably don't have to worry about it. Nested tagging does
      * not appear to be common, so semanticTag(0) is the only one you'll use.
@@ -436,14 +456,15 @@ class Bstr : public Item {
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<Bstr>(mValue); }
 
+  protected:
+    std::vector<uint8_t> mValue;
+
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
-
-    std::vector<uint8_t> mValue;
 };
 
 /**
- * ViewBstr is a read-only version of Bstr backed by std::span
+ * ViewBstr is a read-only version of Bstr backed by span
  */
 class ViewBstr : public Item {
   public:
@@ -453,7 +474,7 @@ class ViewBstr : public Item {
     explicit ViewBstr() {}
 
     // Construct from a span of uint8_t values
-    explicit ViewBstr(std::span<const uint8_t> v) : mView(std::move(v)) {}
+    explicit ViewBstr(span<const uint8_t> v) : mView(std::move(v)) {}
 
     // Construct from a string_view
     explicit ViewBstr(std::string_view v)
@@ -466,8 +487,7 @@ class ViewBstr : public Item {
     ViewBstr(I1 begin, I2 end) : mView(begin, end) {}
 
     // Construct from a uint8_t pointer pair
-    ViewBstr(const uint8_t* begin, const uint8_t* end)
-        : mView(begin, std::distance(begin, end)) {}
+    ViewBstr(const uint8_t* begin, const uint8_t* end) : mView(begin, std::distance(begin, end)) {}
 
     bool operator==(const ViewBstr& other) const& {
         return std::equal(mView.begin(), mView.end(), other.mView.begin(), other.mView.end());
@@ -484,14 +504,14 @@ class ViewBstr : public Item {
         encodeValue(encodeCallback);
     }
 
-    const std::span<const uint8_t>& view() const { return mView; }
+    const span<const uint8_t>& view() const { return mView; }
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<ViewBstr>(mView); }
 
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
 
-    std::span<const uint8_t> mView;
+    span<const uint8_t> mView;
 };
 
 /**
@@ -500,6 +520,9 @@ class ViewBstr : public Item {
 class Tstr : public Item {
   public:
     static constexpr MajorType kMajorType = TSTR;
+
+    // Construct an empty Tstr
+    explicit Tstr() {}
 
     // Construct from a string
     explicit Tstr(std::string v) : mValue(std::move(v)) {}
@@ -540,10 +563,11 @@ class Tstr : public Item {
 
     std::unique_ptr<Item> clone() const override { return std::make_unique<Tstr>(mValue); }
 
+  protected:
+    std::string mValue;
+
   private:
     void encodeValue(EncodeCallback encodeCallback) const;
-
-    std::string mValue;
 };
 
 /**
@@ -567,8 +591,7 @@ class ViewTstr : public Item {
 
     // Construct from a uint8_t pointer pair
     ViewTstr(const uint8_t* begin, const uint8_t* end)
-        : mView(reinterpret_cast<const char*>(begin),
-                std::distance(begin, end)) {}
+        : mView(reinterpret_cast<const char*>(begin), std::distance(begin, end)) {}
 
     bool operator==(const ViewTstr& other) const& { return mView == other.mView; }
 
@@ -929,6 +952,78 @@ class Null : public Simple {
     std::unique_ptr<Item> clone() const override { return std::make_unique<Null>(); }
 };
 
+#if defined(__STDC_IEC_559__) || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+/**
+ * Float is a concrete type that implements CBOR major type 7, with additional item value for
+ * FLOAT.
+ */
+class Float : public Simple {
+  public:
+    static constexpr SimpleType kSimpleType = FLOAT;
+
+    explicit Float(float v) : mValue(v) {}
+
+    SimpleType simpleType() const override { return kSimpleType; }
+    Float* asFloat() override { return this; }
+
+    float value() const { return mValue; }
+    size_t encodedSize() const override { return 5; }
+
+    using Item::encode;
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+        uint32_t bits;
+        std::memcpy(&bits, &mValue, sizeof(float));
+        return encodeHeader(bits, pos, end);
+    }
+    void encode(EncodeCallback encodeCallback) const override {
+        uint32_t bits;
+        std::memcpy(&bits, &mValue, sizeof(float));
+        encodeHeader(bits, encodeCallback);
+    }
+
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Float>(mValue); }
+
+  private:
+    float mValue;
+};
+#endif  // __STDC_IEC_559__ || FLT_MANT_DIG == 24 || __FLT_MANT_DIG__ == 24
+
+#if defined(__STDC_IEC_559__) || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+/**
+ * Double is a concrete type that implements CBOR major type 7, with additional item value for
+ * DOUBLE.
+ */
+class Double : public Simple {
+  public:
+    static constexpr SimpleType kSimpleType = DOUBLE;
+
+    explicit Double(double v) : mValue(v) {}
+
+    SimpleType simpleType() const override { return kSimpleType; }
+    Double* asDouble() override { return this; }
+
+    double value() const { return mValue; }
+    size_t encodedSize() const override { return 9; }
+
+    using Item::encode;
+    uint8_t* encode(uint8_t* pos, const uint8_t* end) const override {
+        uint64_t bits;
+        std::memcpy(&bits, &mValue, sizeof(double));
+        return encodeHeader(bits, pos, end);
+    }
+    void encode(EncodeCallback encodeCallback) const override {
+        uint64_t bits;
+        std::memcpy(&bits, &mValue, sizeof(double));
+        encodeHeader(bits, encodeCallback);
+    }
+
+    std::unique_ptr<Item> clone() const override { return std::make_unique<Double>(mValue); }
+
+  private:
+    double mValue;
+};
+#endif  // __STDC_IEC_559__ || DBL_MANT_DIG == 53 || __DBL_MANT_DIG__ == 53
+
 /**
  * Returns pretty-printed CBOR for |item|
  *
@@ -1067,17 +1162,17 @@ inline void map_helper(Map& map, Key&& key, Value&& value, Rest&&... rest) {
 }  // namespace details
 
 template <typename... Args,
-         /* Prevent implicit construction with a single argument. */
-         typename = std::enable_if_t<(sizeof...(Args)) != 1>>
+          /* Prevent implicit construction with a single argument. */
+          typename = std::enable_if_t<(sizeof...(Args)) != 1>>
 Array::Array(Args&&... args) {
     mEntries.reserve(sizeof...(args));
     (mEntries.push_back(details::makeItem(std::forward<Args>(args))), ...);
 }
 
 template <typename T,
-         /* Prevent use as copy constructor. */
-         typename = std::enable_if_t<
-            !std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<T>>>>>
+          /* Prevent use as copy constructor. */
+          typename = std::enable_if_t<
+                  !std::is_same_v<Array, std::remove_cv_t<std::remove_reference_t<T>>>>>
 Array::Array(T&& v) {
     mEntries.push_back(details::makeItem(std::forward<T>(v)));
 }
